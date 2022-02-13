@@ -1,0 +1,129 @@
+---
+title: "WhiteMatterDevelopment"
+author: "Benjamin Risk"
+date: "1/28/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Longchuan's Email
+
+Ben
+
+I hope everything is going well on your end!
+
+I wonder whether I could ask you a huge favor regarding using GAM/GAMM model to fit our WM data in infants. 
+One challenge we have had in analyzing these data is that we have quite a few covariates, but our sample size is not that large. As a result, we tried to incorporate these covariates in a hierarchical manner. But before we finalize our analyses, a statistician’s inputs like yours will be really beneficial. 
+
+Simply speaking, we want to see how different covariates (age, gender and gestational age) impact white matter development. More specifically, we want to incorporate the following terms: 
+
+Age effect
+Main effect of gestational age
+Main effect of sex
+age x gestational age interaction
+age x sex interaction
+
+When I ran using GAM (with random effects corporated) or GAMM model, I always got error message saying more coefficients than data. Since I noticed that even two GAM models with different approach on handling random effects seem to require different sample size, Sarah and I wonder whether you could take a look at these data using GAMM model, to see whether there is absolutely NO way that we could use GAM/GAMM model with the sample size we currently have. 
+
+Part of the reason that we want these covariates incorporated is because we tried to follow Holland’s study (see attached). 
+
+Any inputs will be greatly appreciated!
+Longchuan
+
+## Notes on Holland model
+
+
+smoother for Age effect
+
+Main effect of gestational age
+
+Main effect of sex
+
+linear effect of age x linear effect gestational age interaction
+
+linear effect of age x sex interaction
+
+This model is difficult to fit and hard to interpret. The model estimates a non-linear effect of age, but then a linear modification by sex, which seems arbtirary. The model also estimates a linear modification of age by gestational age, which also makes interpretation challenging. When estimating these interaction effects, the main effect of age becomes uninterpretable: it is the non-linear effect of age for the baseline sex (either male or female) at average gestational age when accounting for a linear interaction between age and sex and linear interaction between gestational age and sex...
+
+One could pursue a model that includes a bivariate smooth for age and gestational age and male, and a second bivariate smooth for age and gestational age and female, but it would take some work to interpret. It also takes a little to work to conduct a test of the significance of this interaction. 
+
+
+## Analysis
+
+```{r,results=FALSE}
+# NOTE: deleted a space and copy and paste to get columns to align
+dat = read.delim('dti_data_extracted_by_tracts_all_atlas_symmetry_xyflipped_2_TnP2020_bin_tensorup_s_m_aff_diffeo_harmon_masked_scalar_par1_combat.txt',sep=" ",stringsAsFactors = TRUE)
+
+head(dat)
+summary(dat)
+table(dat$ROI)
+table(dat$Unique_ID)
+```
+
+Basic GAMM:
+
+```{r}
+library(mgcv)
+library(itsadug)
+dat.fa = dat[dat$DTI_type=='fa',]
+table(dat.fa$Unique_ID)
+
+model0 = gam(DTI_val~s(Corr_age,by=Sex,k=20)+s(GA,k=5)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat.fa)
+summary(model0)
+plot(model0)
+
+
+plot_smooth(model0,view="Corr_age",col='blue')
+plot_smooth(model0, view="Corr_age", cond=list(Sex="F"), add=TRUE, col='red')
+
+
+```
+
+The red line is females and the blue line is males.
+
+```{r}
+library(mgcv)
+library(itsadug)
+dat$ifPrisma=as.numeric(dat$ifPrisma)
+
+# bivariate spline 
+# FA:
+model0.fa = gam(DTI_val~s(Corr_age,GA,k=20)+Sex+s(Unique_ID,bs='re')+ifPrisma,method='REML',data=dat[dat$DTI_type=='fa',])
+vis.gam(model0,view=c('Corr_age','GA'),theta=-45,ticktype='detailed')
+
+boxplot(resid(model0.fa)~dat[dat$DTI_type=='fa','ifPrisma'])
+  
+
+model1.fa = gam(DTI_val~s(chor_age,GA,k=20)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat.fa)
+
+par(mfrow=c(1,2),mar=c(0,0,0,0))
+
+vis.gam(model0.fa,view=c('Corr_age','GA'),theta=-45,ticktype='detailed')
+vis.gam(model1.fa,view=c('chor_age','GA'),theta=-45,ticktype='detailed')
+
+# TO DO:
+# FORMALLY TEST FOR THE SIGNIFICANT INTERACTION
+# check non-linearity of GA in chron and corr age
+# check beer paper
+# sex effects: simplify using corrected age
+
+```
+
+```{r}
+model0.rd = gam(DTI_val~s(Corr_age,GA,k=20)+Sex+s(Unique_ID,bs='re')+ifPrisma,method='REML',data=dat[dat$DTI_type=='rd',])
+
+model0.ad = gam(DTI_val~s(Corr_age,GA,k=20)+Sex+s(Unique_ID,bs='re')+ifPrisma,method='REML',data=dat[dat$DTI_type=='ad',])
+
+model0.tr = gam(DTI_val~s(Corr_age,GA,k=20)+Sex+s(Unique_ID,bs='re')+ifPrisma,method='REML',data=dat[dat$DTI_type=='tr',])
+
+pdf(file='ResidualBoxplotsByScanner.pdf')
+par(mfrow=c(2,2))
+boxplot(resid(model0.fa)~dat[dat$DTI_type=='fa','ifPrisma'])
+boxplot(resid(model0.rd)~dat[dat$DTI_type=='rd','ifPrisma'])
+boxplot(resid(model0.ad)~dat[dat$DTI_type=='ad','ifPrisma'])
+boxplot(resid(model0.tr)~dat[dat$DTI_type=='tr','ifPrisma'])
+dev.off()
+```
