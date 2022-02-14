@@ -1,7 +1,7 @@
 ---
 title: "WhiteMatterDevelopment"
 author: "Benjamin Risk"
-date: "1/28/2022"
+date: "2/14/2022"
 output: html_document
 ---
 
@@ -9,121 +9,175 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Longchuan's Email
 
-Ben
+## Data prep
 
-I hope everything is going well on your end!
-
-I wonder whether I could ask you a huge favor regarding using GAM/GAMM model to fit our WM data in infants. 
-One challenge we have had in analyzing these data is that we have quite a few covariates, but our sample size is not that large. As a result, we tried to incorporate these covariates in a hierarchical manner. But before we finalize our analyses, a statistician’s inputs like yours will be really beneficial. 
-
-Simply speaking, we want to see how different covariates (age, gender and gestational age) impact white matter development. More specifically, we want to incorporate the following terms: 
-
-Age effect
-Main effect of gestational age
-Main effect of sex
-age x gestational age interaction
-age x sex interaction
-
-When I ran using GAM (with random effects corporated) or GAMM model, I always got error message saying more coefficients than data. Since I noticed that even two GAM models with different approach on handling random effects seem to require different sample size, Sarah and I wonder whether you could take a look at these data using GAMM model, to see whether there is absolutely NO way that we could use GAM/GAMM model with the sample size we currently have. 
-
-Part of the reason that we want these covariates incorporated is because we tried to follow Holland’s study (see attached). 
-
-Any inputs will be greatly appreciated!
-Longchuan
-
-## Notes on Holland model
-
-
-smoother for Age effect
-
-Main effect of gestational age
-
-Main effect of sex
-
-linear effect of age x linear effect gestational age interaction
-
-linear effect of age x sex interaction
-
-This model is difficult to fit and hard to interpret. The model estimates a non-linear effect of age, but then a linear modification by sex, which seems arbtirary. The model also estimates a linear modification of age by gestational age, which also makes interpretation challenging. When estimating these interaction effects, the main effect of age becomes uninterpretable: it is the non-linear effect of age for the baseline sex (either male or female) at average gestational age when accounting for a linear interaction between age and sex and linear interaction between gestational age and sex...
-
-One could pursue a model that includes a bivariate smooth for age and gestational age and male, and a second bivariate smooth for age and gestational age and female, but it would take some work to interpret. It also takes a little to work to conduct a test of the significance of this interaction. 
-
-
-## Analysis
+First, create a dataset with each ROI by DTI metric as a column. The data are provided in long format, and this converts the data to wide format. This also stacks that whole brain data with the regional data.
 
 ```{r,results=FALSE}
 # NOTE: deleted a space and copy and paste to get columns to align
-dat = read.delim('dti_data_extracted_by_tracts_all_atlas_symmetry_xyflipped_2_TnP2020_bin_tensorup_s_m_aff_diffeo_harmon_masked_scalar_par1_combat.txt',sep=" ",stringsAsFactors = TRUE)
+dat.a = read.delim('dti_data_extracted_by_tracts_all_atlas_symmetry_xyflipped_2_TnP2020.txt',sep=" ",stringsAsFactors = TRUE)
 
-head(dat)
-summary(dat)
+dat.b = read.delim('dti_data_extracted_by_tracts_all_atlas_symmetry_xyflipped_2_TnP2020_bin.txt',sep=" ",stringsAsFactors = TRUE)
+
+all(names(dat.a)==names(dat.b))
+
+dat = rbind(dat.a,dat.b)
+
+dat$Scanner = as.factor(ifelse(dat$ifPrisma==0,'trio','prisma'))
+
 table(dat$ROI)
-table(dat$Unique_ID)
-```
-
-Basic GAMM:
-
-```{r}
-library(mgcv)
-library(itsadug)
-dat.fa = dat[dat$DTI_type=='fa',]
-table(dat.fa$Unique_ID)
-
-model0 = gam(DTI_val~s(Corr_age,by=Sex,k=20)+s(GA,k=5)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat.fa)
-summary(model0)
-plot(model0)
+table(dat[dat$DTI_type=='fa' & dat$ROI=='CCb','Unique_ID'])
+# participants vary from 1 to 3 visits
+table(table(dat[dat$DTI_type=='fa' & dat$ROI=='CCb','Unique_ID']))
+# 41 infants have 1 visit, 26 have 2, and 12 have 3
 
 
-plot_smooth(model0,view="Corr_age",col='blue')
-plot_smooth(model0, view="Corr_age", cond=list(Sex="F"), add=TRUE, col='red')
-
+# make data wide:
+library(tidyr)
+names(dat)
+dat$feature_names = paste0(dat$ROI,'_',dat$DTI_type)
+dat2 = dat[,c('GA','chor_age','Corr_age','Sex','Unique_ID','DTI_val','ifPrisma','Scanner','feature_names')]
+dat_wide = dat2%>%pivot_wider(names_from=feature_names,values_from='DTI_val')
 
 ```
 
-The red line is females and the blue line is males.
+
+## Apply longitudinal combat and investigate scanner effects
+
+Construct a b-spline for corrected age. Then longitudinal combat will use this spline for corrected age. We used df=5 to capture a relatively simple curve, since the effective degrees of freedom from initial GAMMs indicated effective degrees of freedom of 3-4 in the penalized spline approach. Based on inspetion, the results appear relatively robust to this choice, although the spline may help to reduce some scanner effects. 
+
+Note, longitudinal combat models the batch effect on the mean as an intercept, i.e., shift up or down in the developmental trajectory. Current harmonization methods do not allow batch effects to cause different curves. Thus, it is important to check that there are not substantial interactions between batch (here, scanner) and the develomental trajectory, i.e., that the curves do not substantially differ on the trio and prisma scanners.
 
 ```{r}
-library(mgcv)
-library(itsadug)
-dat$ifPrisma=as.numeric(dat$ifPrisma)
-
-# bivariate spline 
-# FA:
-model0.fa = gam(DTI_val~s(Corr_age,GA,k=20)+Sex+s(Unique_ID,bs='re')+ifPrisma,method='REML',data=dat[dat$DTI_type=='fa',])
-vis.gam(model0,view=c('Corr_age','GA'),theta=-45,ticktype='detailed')
-
-boxplot(resid(model0.fa)~dat[dat$DTI_type=='fa','ifPrisma'])
+library(longCombat)
+# reshape wide to get input features for longitudinal combat
+feature_names=names(dat_wide)[8:55]
+detach('package:tidyr',unload=TRUE)
+degreesfreedom=5
+temp = splines::bs(dat_wide$Corr_age,df=degreesfreedom)
+temp = data.frame(temp)
+names(temp) = paste0("Corr_age",1:degreesfreedom)
+dat_wide = cbind(dat_wide,temp)
   
-
-model1.fa = gam(DTI_val~s(chor_age,GA,k=20)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat.fa)
-
-par(mfrow=c(1,2),mar=c(0,0,0,0))
-
-vis.gam(model0.fa,view=c('Corr_age','GA'),theta=-45,ticktype='detailed')
-vis.gam(model1.fa,view=c('chor_age','GA'),theta=-45,ticktype='detailed')
-
-# TO DO:
-# FORMALLY TEST FOR THE SIGNIFICANT INTERACTION
-# check non-linearity of GA in chron and corr age
-# check beer paper
-# sex effects: simplify using corrected age
-
+  # check the spline fit:
+  # model.test = lm(dat_wide$AF_fa~as.matrix(temp))
+  # plot(predict(model.test)~dat_wide$Corr_age)
+     
+dat_combat <- longCombat(idvar='Unique_ID', 
+                             timevar='Corr_age',
+                             batchvar='Scanner', 
+                             features=feature_names,
+                             formula='Corr_age1 + Corr_age2+ Corr_age3 + Corr_age4 + Corr_age5+Sex', 
+                            #formula='Corr_age + Sex', # note: linear vs spline seem similar
+                             ranef='(1|Unique_ID)',
+                             data=dat_wide)
+dat_harmonized <- merge(dat_wide, dat_combat$data_combat, by=c('Unique_ID', 'Corr_age','Scanner'))
 ```
+
+## Check the harmonization in a few features
+
+Next, we examine whether combat reduced batch effects. This code also allows a comparison of the curves in the trio and prisma scanners.
 
 ```{r}
-model0.rd = gam(DTI_val~s(Corr_age,GA,k=20)+Sex+s(Unique_ID,bs='re')+ifPrisma,method='REML',data=dat[dat$DTI_type=='rd',])
+library(mgcv)
+library(itsadug)
+examine_combat = function(feature,feature.combat,dataset) {
+ 
+  model0 = gam(feature~s(Corr_age,by=Scanner,bs='bs')+s(GA,k=5,bs='bs')+Sex+s(Unique_ID,bs='re')+Scanner,method='REML',data=dataset)
 
-model0.ad = gam(DTI_val~s(Corr_age,GA,k=20)+Sex+s(Unique_ID,bs='re')+ifPrisma,method='REML',data=dat[dat$DTI_type=='ad',])
-
-model0.tr = gam(DTI_val~s(Corr_age,GA,k=20)+Sex+s(Unique_ID,bs='re')+ifPrisma,method='REML',data=dat[dat$DTI_type=='tr',])
-
-pdf(file='ResidualBoxplotsByScanner.pdf')
-par(mfrow=c(2,2))
-boxplot(resid(model0.fa)~dat[dat$DTI_type=='fa','ifPrisma'])
-boxplot(resid(model0.rd)~dat[dat$DTI_type=='rd','ifPrisma'])
-boxplot(resid(model0.ad)~dat[dat$DTI_type=='ad','ifPrisma'])
-boxplot(resid(model0.tr)~dat[dat$DTI_type=='tr','ifPrisma'])
-dev.off()
+  model0.harm = gam(feature.combat~s(Corr_age,by=Scanner,bs='bs')+s(GA,k=5,bs='bs')+Sex+s(Unique_ID,bs='re')+Scanner,method='REML',data=dataset)
+  par(mfrow=c(2,3))
+  plot_smooth(model0,view="Corr_age",cond=list(Scanner='trio'),col='red',print.summary=FALSE)
+  plot_smooth(model0, view="Corr_age", cond=list(Scanner='prisma'), add=TRUE, col='blue',print.summary=FALSE)
+  plot_diff(model0,view='Corr_age',comp=list(Scanner=c('trio','prisma')),print.summary=FALSE)
+  boxplot(resid(model0)~dataset$Scanner,ylab='residual - no harmonize',xlab='Scanner')
+  
+  plot_smooth(model0.harm,view="Corr_age",cond=list(Scanner='trio'),col='red',print.summary=FALSE)
+  plot_smooth(model0.harm, view="Corr_age", cond=list(Scanner='prisma'), add=TRUE, col='blue',print.summary=FALSE)
+  plot_diff(model0.harm,view='Corr_age',comp=list(Scanner=c('trio','prisma')),print.summary=FALSE)
+  boxplot(resid(model0.harm)~dataset$Scanner,ylab='residual - harmonized',xlab='Scanner')
+}
 ```
+
+Examine the whole brain curves:
+```{r}
+examine_combat(dat_harmonized$WB_fa,dat_harmonized$AF_fa.combat,dat_harmonized)
+examine_combat(dat_harmonized$WB_ad,dat_harmonized$WB_ad.combat,dat_harmonized)
+examine_combat(dat_harmonized$WB_tr,dat_harmonized$WB_tr.combat,dat_harmonized)
+examine_combat(dat_harmonized$WB_rd,dat_harmonized$WB_rd.combat,dat_harmonized)
+```
+Combat is helping to remove the shift in the mean. I don't see much change in the variances, though, as indicated by the IQR. In my opinion, we could just control for scanner effects in the mean model, since the variances don't seem harmonized. On the other hand, since combat is regarded as a more thorough approach, we can continue with combat. 
+
+
+
+Examine a few of the trajectories in different ROIs:
+
+```{r}
+examine_combat(dat_harmonized$AF_fa,dat_harmonized$AF_fa.combat,dat_harmonized)
+
+examine_combat(dat_harmonized$CCg_fa,dat_harmonized$CCg_fa.combat,dat_harmonized)
+
+examine_combat(dat_harmonized$CCg_tr,dat_harmonized$CCg_tr.combat,dat_harmonized)
+
+examine_combat(dat_harmonized$PT_rd,dat_harmonized$PT_rd.combat,dat_harmonized)
+
+```
+
+
+## Examine the interaction between gestational age and chronological age
+
+Fit a bivariate spline. This section uses FA. 
+
+```{r,eval=FALSE}
+model0 = gam(WB_fa.combat~s(chor_age)+s(GA)+ti(chor_age,GA)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+gam.check(model0) # edf are all far from k', so the default k's suffice. 
+summary(model0)
+
+
+vis.gam(model0,view=c('chor_age','GA'),theta=-45,ticktype='detailed',xlab='Chron Age',ylab='Gest Age',zlab='FA')
+
+plot_smooth(model0, view="chor_age", cond=list(GA=36),xlab='Chronological Age',col='purple')
+plot_smooth(model0, view="chor_age", cond=list(GA=40),xlab='Chronological Age',col='blue',add=TRUE)
+```
+There is a significant interaction between gestational age and chronological age (approximate p-value=0.004). The purple curve illustrates the fractional anisotropy at different chronological ages in an infant with gestational age 34 weeks, and the blue curve illustrates the FA in an infant with gestational age 42 weeks. By chronological age 200, the fractional isotropy is similar, as the premature infants have mostly "caught up" to the regular term infants, as the mean curves are close and the 95% confidence intervals overlap. 
+
+Next, we check whether there is a significant interaction between gestational age and corrected age. 
+```{r}
+model0.corr = gam(WB_fa.combat~s(Corr_age)+s(GA)+ti(Corr_age,GA)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+summary(model0.corr)
+plot_smooth(model0.corr, view="Corr_age", cond=list(GA=36),xlab='Corrected Age',col='purple')
+plot_smooth(model0.corr, view="Corr_age", cond=list(GA=40),xlab='Corrected Age',col='blue',add=TRUE)
+```
+
+There is no interaction between gestational age and corrected age (p=0.36). The interaction observed with chronological age and gestational age appears to be driven by a shift in the curve, which is corrected when using the corrected age. The FA curve as function of corrected age is very similar for infants with GA=36 and 40. 
+
+Also, GA is not significant in this model.
+
+## Examine whether the developmental trajectories differ between males and females. 
+
+```{r}
+model.sex.fa = gam(WB_fa.combat~s(Corr_age,by=Sex)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+summary(model.sex.fa)
+
+par(mfrow=c(2,1))
+plot_smooth(model.sex.fa, view="Corr_age", cond=list(Sex='M'), col='blue',print.summary=FALSE)
+plot_smooth(model.sex.fa,view="Corr_age",cond=list(Sex='F'),col='red',print.summary=FALSE,add=TRUE)
+
+plot_diff(model.sex.fa,view='Corr_age',comp=list(Sex=c('F','M')))
+```
+
+Initially, females have higher FA than males. After approximately 34 days, the FA levels are similar.
+
+
+We can also check the pattern in the not-harmonized data:
+```{r}
+model.sex.fa.nocombat = gam(WB_fa~s(Corr_age,by=Sex)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+
+par(mfrow=c(2,1))
+plot_smooth(model.sex.fa.nocombat, view="Corr_age", cond=list(Sex='M'), col='blue',print.summary=FALSE)
+plot_smooth(model.sex.fa.nocombat,view="Corr_age",cond=list(Sex='F'),col='red',print.summary=FALSE,add=TRUE)
+
+plot_diff(model.sex.fa.nocombat,view='Corr_age',comp=list(Sex=c('F','M')))
+```
+The results are very similar using the non-harmonized data. 
