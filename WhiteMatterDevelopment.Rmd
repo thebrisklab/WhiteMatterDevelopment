@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
+`
 ## Data prep
 
 First, create a dataset with each ROI by DTI metric as a column. The data are provided in long format, and this converts the data to wide format. This also stacks that whole brain data with the regional data.
@@ -73,6 +73,10 @@ dat_combat <- longCombat(idvar='Unique_ID',
                              ranef='(1|Unique_ID)',
                              data=dat_wide)
 dat_harmonized <- merge(dat_wide, dat_combat$data_combat, by=c('Unique_ID', 'Corr_age','Scanner'))
+
+write.csv(dat_harmonized,file='~/Dropbox/WhiteMatterDevelopment/dat_harmonized.csv')
+
+
 ```
 
 ## Check the harmonization in a few features
@@ -129,7 +133,7 @@ examine_combat(dat_harmonized$PT_rd,dat_harmonized$PT_rd.combat,dat_harmonized)
 
 Fit a bivariate spline. This section uses FA. 
 
-```{r,eval=FALSE}
+```{r}
 model0 = gam(WB_fa.combat~s(chor_age)+s(GA)+ti(chor_age,GA)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
 gam.check(model0) # edf are all far from k', so the default k's suffice. 
 summary(model0)
@@ -137,8 +141,18 @@ summary(model0)
 
 vis.gam(model0,view=c('chor_age','GA'),theta=-45,ticktype='detailed',xlab='Chron Age',ylab='Gest Age',zlab='FA')
 
-plot_smooth(model0, view="chor_age", cond=list(GA=36),xlab='Chronological Age',col='purple')
-plot_smooth(model0, view="chor_age", cond=list(GA=40),xlab='Chronological Age',col='blue',add=TRUE)
+
+# 
+a=plot_smooth(model0, view="chor_age", cond=list(GA=36),xlab='Chronological Age',col='red',ylab='Whole Brain FA',hide.label=TRUE,rug=FALSE)+legend(x='bottomright',legend=c('GA=36','GA=40'),lty=1,col=c('red','blue'),bty='n')
+
+# full term:
+#plot_smooth(model0, view="chor_age", cond=list(GA=37),ylab='Whole Brain FA',xlab='Chronological Age',col='purple')
+
+plot_smooth(model0, view="chor_age", cond=list(GA=40),xlab='Chronological Age',ylab='Whole Brain FA',col='blue',add=TRUE,hide.label=TRUE,rug = FALSE,cex=2)
+
+
+plot_smooth(model0, view="chor_age", cond=list(GA=42),xlab='Chronological Age',col='red',add=TRUE,rug=FALSE)
+
 ```
 There is a significant interaction between gestational age and chronological age (approximate p-value=0.004). The purple curve illustrates the fractional anisotropy at different chronological ages in an infant with gestational age 34 weeks, and the blue curve illustrates the FA in an infant with gestational age 42 weeks. By chronological age 200, the fractional isotropy is similar, as the premature infants have mostly "caught up" to the regular term infants, as the mean curves are close and the 95% confidence intervals overlap. 
 
