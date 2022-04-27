@@ -1,0 +1,88 @@
+---
+title: "White Matter Development Data Preparation and Harmonization"
+author: "Benjamin Risk"
+date: "2/14/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data prep
+
+First, stack the whole brain and the ROI data. Also convert trace (tr) to mean diffusivity (md) by dividing the tr by 3. 
+
+```{r,results=FALSE}
+
+# NOTE: deleted a space and copy and paste to get columns to align
+dat.a = read.delim('dti_data_extracted_by_tracts_all_atlas_symmetry_xyflipped_2_TnP2020.txt',sep=" ",stringsAsFactors = TRUE)
+
+dat.b = read.delim('dti_data_extracted_by_tracts_all_atlas_symmetry_xyflipped_2_TnP2020_bin.txt',sep=" ",stringsAsFactors = TRUE)
+
+all(names(dat.a)==names(dat.b))
+
+dat = rbind(dat.a,dat.b)
+
+# replace trace with MD:
+dat$DTI_type = as.character(dat$DTI_type)
+dat$DTI_val[dat$DTI_type=='tr'] = dat$DTI_val[dat$DTI_type=='tr']/3
+dat$DTI_type[dat$DTI_type=='tr'] = 'md'
+head(dat$DTI_val[dat$DTI_type=='md'])
+dat$DTI_type = as.factor(dat$DTI_type)
+dat$Scanner = as.factor(ifelse(dat$ifPrisma==0,'trio','prisma'))
+
+table(dat$ROI)
+table(dat$ROI,dat$DTI_type)
+table(dat[dat$DTI_type=='fa' & dat$ROI=='CCb','Unique_ID'])
+# participants vary from 1 to 3 visits
+table(table(dat[dat$DTI_type=='fa' & dat$ROI=='CCb','Unique_ID']))
+# 41 infants have 1 visit, 26 have 2, and 12 have 3
+```
+
+## Make data wide
+
+Create a dataset with each ROI by DTI metric as a column. The data are provided in long format, and this converts the data to wide format. This also stacks that whole brain data with the regional data. 
+
+```{r}
+library(tidyr)
+names(dat)
+dat$feature_names = paste0(dat$ROI,'_',dat$DTI_type)
+dat2 = dat[,c('GA','chor_age','Corr_age','Sex','Unique_ID','DTI_val','ifPrisma','Scanner','feature_names')]
+dat_wide = dat2%>%pivot_wider(names_from=feature_names,values_from='DTI_val')
+```
+
+
+## Apply longitudinal combat and investigate scanner effects
+
+Construct a b-spline for corrected age. Then longitudinal combat will use this spline for corrected age. We used df=5 to capture a relatively simple curve, since the effective degrees of freedom from initial GAMMs indicated effective degrees of freedom of 3-4 in the penalized spline approach. Based on inspection, the results appear relatively robust to this choice, although the spline may help to reduce some scanner effects. 
+Note, longitudinal combat models the batch effect on the mean as an intercept, i.e., shift up or down in the developmental trajectory. Current harmonization methods do not allow batch effects to cause different curves. Thus, it is important to check that there are not substantial interactions between batch (here, scanner) and the develomental trajectory, i.e., that the curves do not substantially differ on the trio and prisma scanners.
+
+```{r}
+library(longCombat)
+# reshape wide to get input features for longitudinal combat
+feature_names=names(dat_wide)[8:55]
+detach('package:tidyr',unload=TRUE)
+degreesfreedom=5
+temp = splines::bs(dat_wide$Corr_age,df=degreesfreedom)
+temp = data.frame(temp)
+names(temp) = paste0("Corr_age",1:degreesfreedom)
+dat_wide = cbind(dat_wide,temp)
+  
+  # check the spline fit:
+  # model.test = lm(dat_wide$AF_fa~as.matrix(temp))
+  # plot(predict(model.test)~dat_wide$Corr_age)
+     
+dat_combat <- longCombat(idvar='Unique_ID', 
+                             timevar='Corr_age',
+                             batchvar='Scanner', 
+                             features=feature_names,
+                             formula='Corr_age1 + Corr_age2+ Corr_age3 + Corr_age4 + Corr_age5+Sex', 
+                            #formula='Corr_age + Sex', # note: linear vs spline seem similar
+                             ranef='(1|Unique_ID)',
+                             verbose=FALSE,
+                             data=dat_wide)
+dat_harmonized <- merge(dat_wide, dat_combat$data_combat, by=c('Unique_ID', 'Corr_age','Scanner'))
+
+write.csv(dat_harmonized,file='~/Dropbox/WhiteMatterDevelopment/dat_harmonized.csv',row.names=FALSE)
+```
