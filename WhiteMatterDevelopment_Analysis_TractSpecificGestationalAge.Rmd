@@ -1,0 +1,314 @@
+---
+title: 'White Matter Development: Analysis'
+author: "Benjamin Risk"
+date: "4/27/2022"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(mgcv)
+library(itsadug)
+dat_harmonized = read.csv('dat_harmonized.csv',stringsAsFactors = TRUE)
+```
+
+
+Fx -- Fornix (limbic, output of hippocampus)
+
+IFOF -- inferior-fronto-occipital-fasciculus (associative, connects occipital cortex to frontal lobe)
+
+CCb -- body of corpus callosum (commissural, connects hemispheres)
+
+PT -- pyramidal tract includes pyramidal neurons connecting motor neurons to brain stem or spinal cord (corticospinal and corticobulbar tracts)
+
+
+### FA
+
+This function extracts the largest age at which there is a significant difference:
+```{r}
+# note: full term is 37
+maxChronAge = function(GAlow,GAhigh=40,model,ylab,less=TRUE,print.plot=FALSE) {
+  a=plot_diff(model,view='chor_age',comp=list(GA=c(GAlow,GAhigh)),sim.ci = TRUE, hide.label=TRUE,xlab='Chronological age (days)',ylab=ylab,plot=print.plot)
+  if(less) {
+  max(a$chor_age[a$est+a$sim.CI<0])
+  } else {
+    max(a$chor_age[a$est-a$sim.CI>0])
+  }
+}
+
+# Fx and Pt can have opposite trend, become more dissimilar with age
+minChronAge = function(GAlow,GAhigh=40,model,ylab,less=TRUE,print.plot=FALSE) {
+  a=plot_diff(model,view='chor_age',comp=list(GA=c(GAlow,GAhigh)),sim.ci = TRUE, hide.label=TRUE,xlab='Chronological age (days)',ylab=ylab,plot=print.plot)
+  if(less) {
+  min(a$chor_age[a$est+a$sim.CI<0])
+  } else {
+    min(a$chor_age[a$est-a$sim.CI>0])
+  }
+}
+
+```
+
+The syntax used here is described as the functional anova in the supporting R documentation for ?ti(). 
+```{r,error=TRUE}
+
+# Create plots at different gestational ages:
+my.function.ga <- function(dti.tract, my.ylim = c(0.1,0.3), my.ylab,  my.main="", estMaxChronAge=TRUE,estMinChronAge=FALSE,print.legend=FALSE,less=TRUE) {
+    model0 = gam(dti.tract~ti(chor_age,k=9)+ti(GA,k=5)+ti(chor_age,GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+  # step into function to examine model diagnostics:
+ # gam.check(model0)
+  print(summary(model0))
+
+  # vis.gam(model0,view=c('chor_age','GA'),theta=-45,ticktype='detailed',xlab='Chron Age',ylab='Gest Age',zlab='FA')
+  set.seed(123)
+
+  #tiff('../Figures/DiffCurves_FA.tiff',width=720,height=480,pointsize=20)
+  if (estMaxChronAge) {
+      # par(mfrow=c(2,3))
+      (ga.35=maxChronAge(GAlow=35,GAhigh=40,model=model0,ylab='Est. difference',less=less))
+      (ga.36=maxChronAge(GAlow=36,GAhigh=40,model=model0,ylab='Est. difference',less=less))
+      (ga.37=maxChronAge(GAlow=37,GAhigh=40,model=model0,ylab='Est. difference',less=less))
+      (ga.38=maxChronAge(GAlow=38,GAhigh=40,model=model0,ylab='Est. difference',less=less))
+      (ga.39=maxChronAge(GAlow=39,GAhigh=40,model=model0,ylab='Est. difference',less=less))
+      (ga.41=maxChronAge(GAlow=40,GAhigh=41,model=model0,ylab='Est. difference',less=less))
+      #dev.off()
+  }
+  
+  if (estMinChronAge) {
+      # par(mfrow=c(2,3))
+      (ga.35=minChronAge(GAlow=35,GAhigh=40,model=model0,ylab='Est. difference',less=less))
+      (ga.36=minChronAge(GAlow=36,GAhigh=40,model=model0,ylab='Est. difference',less=less))
+      (ga.37=minChronAge(GAlow=37,GAhigh=40,model=model0,ylab='Est. difference',less=less))
+      (ga.38=minChronAge(GAlow=38,GAhigh=40,model=model0,ylab='Est. difference',less=less))
+      (ga.39=minChronAge(GAlow=39,GAhigh=40,model=model0,ylab='Est. difference',less=less))
+      (ga.41=minChronAge(GAlow=40,GAhigh=41,model=model0,ylab='Est. difference',less=less))
+      #dev.off()
+  }
+  
+  cColors = viridis::plasma(15)
+  
+    model0.plot = plot_smooth(model0, view="chor_age",cond=list(GA=35),col=cColors[1],rug=FALSE,ylim=my.ylim,lwd=2,se=0,ylab=my.ylab,xlab='Chronological age (days)',hide.label=TRUE,main=my.main,xlim=c(10,202),print.summary=FALSE)
+  plot_smooth(model0, view="chor_age",cond=list(GA=36),col=cColors[3],add=TRUE,rug=FALSE,lwd=2,se=0,print.summary=FALSE)
+  plot_smooth(model0, view="chor_age",  cond=list(GA=37),col=cColors[5],add=TRUE,rug=FALSE,lwd=2,se=0,print.summary=FALSE)
+  plot_smooth(model0, view="chor_age", se=0, cond=list(GA=38),col=cColors[7],add=TRUE,rug=FALSE,lwd=2,print.summary=FALSE)
+  plot_smooth(model0, view="chor_age", se=0, cond=list(GA=39),col=cColors[9],add=TRUE,rug=FALSE,lwd=2,print.summary=FALSE)
+  plot_smooth(model0, view="chor_age", se=0, cond=list(GA=40),col=cColors[11],add=TRUE,rug=FALSE,lwd=2,print.summary=FALSE)
+  plot_smooth(model0, view="chor_age", se=0, cond=list(GA=41),col=cColors[13],add=TRUE,rug=FALSE,lwd=2,print.summary=FALSE)
+  
+  if(print.legend==TRUE) {
+  legend(x='bottomright',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,lwd=2,col=cColors[seq(1,13,by=2)],bty='n',cex=1)
+  }
+  if (estMaxChronAge | estMinChronAge) {
+    abline(v=ga.41,col=cColors[13],lwd=2,lty=2)
+    abline(v=ga.39,col=cColors[9],lwd=2,lty=2)
+    abline(v=ga.38,col=cColors[7],lwd=2,lty=2)
+    abline(v=ga.37,col=cColors[5],lwd=2,lty=2)
+    abline(v=ga.36,col=cColors[3],lwd=2,lty=2)
+    abline(v=ga.35,col=cColors[1],lwd=2,lty=2)
+  }
+  my.plot = recordPlot()
+  my.plot
+}
+```
+
+
+### FA
+
+```{r}
+tiff('../Figures/TractSpecific_GestandCorrectedAgeFA.tiff',width=1080,height=1280,pointsize=18)
+
+par(mfrow=c(4,3))
+
+# Note on interaction effects:
+# Fx p=0.69, CCs p=0.10; ILF p==0.41, AF p=0.13
+fx.fa = my.function.ga(dti.tract = dat_harmonized$Fx_fa.combat, my.ylab = "FX FA")
+
+ci.fa = my.function.ga(dti.tract = dat_harmonized$Ci_fa.combat, my.ylab = "Ci FA")
+
+ccg.fa = my.function.ga(dti.tract = dat_harmonized$CCg_fa.combat, my.ylab = "CCg FA")
+
+ccb.fa = my.function.ga(dti.tract = dat_harmonized$CCb_fa.combat, my.ylab="CCb FA")
+
+ccs.fa = my.function.ga(dti.tract = dat_harmonized$CCs_fa.combat, my.ylab="CCs FA")
+
+ilf.fa = my.function.ga(dti.tract = dat_harmonized$ILF_fa.combat, my.ylab="ILF FA")
+
+ifof.fa = my.function.ga(dti.tract = dat_harmonized$IFOF_fa.combat, my.ylab="IFOF FA")
+
+af.fa = my.function.ga(dti.tract = dat_harmonized$AF_fa.combat, my.ylab = "AF FA")
+
+uf.fa = my.function.ga(dti.tract = dat_harmonized$UF_fa.combat, my.ylab="UF FA")
+
+atr.fa = my.function.ga(dti.tract = dat_harmonized$ATR_fa.combat, my.ylab="ATR FA")
+
+pt.fa = my.function.ga(dti.tract = dat_harmonized$PT_fa.combat, my.ylab="PT FA",print.legend = FALSE)
+
+plot.new()
+  cColors = viridis::plasma(15)
+  
+legend(x='topleft',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,lwd=2,col=cColors[seq(1,13,by=2)],bty='n',cex=0.5)
+
+dev.off()
+
+```
+
+### MD
+
+```{r}
+tiff('../Figures/TractSpecific_GestandCorrectedAgeMD.tiff',width=1080,height=1280,pointsize=18)
+
+par(mfrow=c(4,3))
+
+fx = my.function.ga(dti.tract = dat_harmonized$Fx_md.combat, my.ylab = "FX MD",less=FALSE,my.ylim = c(0.9,1.5),estMinChronAge = FALSE,estMaxChronAge=FALSE)
+
+ci = my.function.ga(dti.tract = dat_harmonized$Ci_md.combat, my.ylab = "Ci MD",my.ylim = c(0.9,1.5),less=FALSE)
+
+ccg = my.function.ga(dti.tract = dat_harmonized$CCg_md.combat, my.ylab = "CCg MD",my.ylim = c(0.9,1.5),less=FALSE)
+
+ccb = my.function.ga(dti.tract = dat_harmonized$CCb_md.combat, my.ylab="CCb MD",my.ylim = c(0.9,1.5),less=FALSE)
+
+ccs = my.function.ga(dti.tract = dat_harmonized$CCs_md.combat, my.ylab="CCs MD",less=FALSE,my.ylim = c(0.9,1.5))
+
+ilf = my.function.ga(dti.tract = dat_harmonized$ILF_md.combat, my.ylab="ILF MD",less=FALSE,my.ylim = c(0.9,1.5))
+
+ifof = my.function.ga(dti.tract = dat_harmonized$IFOF_md.combat, my.ylab="IFOF MD",less=FALSE,my.ylim=c(0.9,1.5))
+
+af = my.function.ga(dti.tract = dat_harmonized$AF_md.combat, my.ylab = "AF MD",my.ylim=c(0.9,1.5),less=FALSE,estMaxChronAge=FALSE)
+
+uf = my.function.ga(dti.tract = dat_harmonized$UF_md.combat, my.ylab="UF MD",less=FALSE,my.ylim=c(0.9,1.5))
+
+atr = my.function.ga(dti.tract = dat_harmonized$ATR_md.combat, my.ylab="ATR MD",less=FALSE,my.ylim=c(0.9,1.5))
+
+pt = my.function.ga(dti.tract = dat_harmonized$PT_md.combat, my.ylab="PT MD",print.legend = FALSE,less=FALSE,estMinChronAge=FALSE,estMaxChronAge=FALSE,my.ylim=c(0.9,1.5))
+
+plot.new()
+  cColors = viridis::plasma(15)
+  
+legend(x='topleft',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,lwd=2,col=cColors[seq(1,13,by=2)],bty='n',cex=1.2)
+
+dev.off()
+```
+For FX and PT, there is trend for the differences to increase over time, and chronological age less than the dashed lines do not significantly differ between the denoted GA and GA=40, while chronological age greater than the dashed lines significantly differ.
+
+
+### AD
+
+```{r}
+tiff('../Figures/TractSpecific_GestandCorrectedAgeAD.tiff',width=1080,height=1280,pointsize=18)
+
+par(mfrow=c(4,3))
+
+fx = my.function.ga(dti.tract = dat_harmonized$Fx_ad.combat, my.ylab = "FX AD",less=FALSE,my.ylim = c(1.1,1.7),estMinChronAge = FALSE,estMaxChronAge=FALSE)
+
+ci = my.function.ga(dti.tract = dat_harmonized$Ci_ad.combat, my.ylab = "Ci AD",my.ylim = c(1.1,1.7),less=FALSE)
+
+ccg = my.function.ga(dti.tract = dat_harmonized$CCg_ad.combat, my.ylab = "CCg AD",my.ylim = c(1.1,1.7),less=FALSE)
+
+ccb = my.function.ga(dti.tract = dat_harmonized$CCb_ad.combat, my.ylab="CCb AD",my.ylim = c(1.1,1.7),less=FALSE)
+
+ccs = my.function.ga(dti.tract = dat_harmonized$CCs_ad.combat, my.ylab="CCs AD",less=FALSE,my.ylim = c(1.1,1.7))
+
+ilf = my.function.ga(dti.tract = dat_harmonized$ILF_ad.combat, my.ylab="ILF AD",less=FALSE,my.ylim = c(1.1,1.7))
+
+ifof = my.function.ga(dti.tract = dat_harmonized$IFOF_ad.combat, my.ylab="IFOF AD",less=FALSE,my.ylim = c(1.1,1.7))
+
+af = my.function.ga(dti.tract = dat_harmonized$AF_ad.combat, my.ylab = "AF AD",my.ylim = c(1.1,1.7),less=FALSE,estMaxChronAge = FALSE)
+
+uf = my.function.ga(dti.tract = dat_harmonized$UF_ad.combat, my.ylab="UF AD",less=FALSE,my.ylim = c(1.1,1.7))
+
+atr = my.function.ga(dti.tract = dat_harmonized$ATR_ad.combat, my.ylab="ATR AD",less=FALSE,my.ylim = c(1.1,1.7))
+
+pt = my.function.ga(dti.tract = dat_harmonized$PT_ad.combat, my.ylab="PT AD",print.legend = FALSE,less=FALSE,estMinChronAge=FALSE,estMaxChronAge=FALSE,my.ylim = c(1.1,1.7))
+
+plot.new()
+  cColors = viridis::plasma(15)
+  
+legend(x='topleft',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,lwd=2,col=cColors[seq(1,13,by=2)],bty='n',cex=1.2)
+
+dev.off()
+```
+AF is strange: small region over which there are significant differences, approximately 50-70 days. For clarify, don't plus the significance lines. 
+
+
+### RD
+
+```{r}
+tiff('../Figures/TractSpecific_GestandCorrectedAgeRD.tiff',width=1080,height=1280,pointsize=18)
+par(mfrow=c(4,3))
+
+fx = my.function.ga(dti.tract = dat_harmonized$Fx_rd.combat, my.ylab = "FX RD",less=FALSE,my.ylim = c(0.8,1.4),estMinChronAge = FALSE,estMaxChronAge=FALSE)
+
+ci = my.function.ga(dti.tract = dat_harmonized$Ci_rd.combat, my.ylab = "Ci RD",my.ylim = c(0.8,1.4),less=FALSE)
+
+ccg = my.function.ga(dti.tract = dat_harmonized$CCg_rd.combat, my.ylab = "CCg RD",my.ylim = c(0.8,1.4),less=FALSE)
+
+ccb = my.function.ga(dti.tract = dat_harmonized$CCb_rd.combat, my.ylab="CCb RD",my.ylim = c(0.8,1.4),less=FALSE)
+
+ccs = my.function.ga(dti.tract = dat_harmonized$CCs_rd.combat, my.ylab="CCs RD",less=FALSE,my.ylim = c(0.8,1.4))
+
+ilf = my.function.ga(dti.tract = dat_harmonized$ILF_rd.combat, my.ylab="ILF RD",less=FALSE,my.ylim = c(0.8,1.4))
+
+ifof = my.function.ga(dti.tract = dat_harmonized$IFOF_rd.combat, my.ylab="IFOF RD",less=FALSE,my.ylim = c(0.8,1.4))
+
+af = my.function.ga(dti.tract = dat_harmonized$AF_rd.combat, my.ylab = "AF RD",my.ylim = c(0.8,1.4),less=FALSE)
+
+uf = my.function.ga(dti.tract = dat_harmonized$UF_rd.combat, my.ylab="UF RD",less=FALSE,my.ylim = c(0.8,1.4))
+
+atr = my.function.ga(dti.tract = dat_harmonized$ATR_rd.combat, my.ylab="ATR RD",less=FALSE,my.ylim = c(0.8,1.4))
+
+pt = my.function.ga(dti.tract = dat_harmonized$PT_rd.combat, my.ylab="PT RD",print.legend = FALSE,less=FALSE,estMinChronAge=FALSE,estMaxChronAge=FALSE,my.ylim = c(0.8,1.4))
+
+plot.new()
+  cColors = viridis::plasma(15)
+  
+legend(x='topleft',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,lwd=2,col=cColors[seq(1,13,by=2)],bty='n',cex=1.2)
+
+dev.off()
+```
+
+
+
+
+
+
+```{r}
+
+tiff('../Figures/TractSpecific_GestandCorrectedAgeRD.tiff',width=1080,height=1280,pointsize=18)
+par(mfrow=c(4,3))
+
+#pdf(file='../Figures/TractSpecific_GestandCorrectedAgeRD.pdf')
+
+fx = my.function.ga(dti.tract = dat_harmonized$Fx_rd.combat, my.ylab = "FX RD",less=FALSE,my.ylim = c(0.8,1.4),estMinChronAge = FALSE,estMaxChronAge=FALSE)
+
+ci = my.function.ga(dti.tract = dat_harmonized$Ci_rd.combat, my.ylab = "Ci RD",my.ylim = c(0.8,1.4),less=FALSE)
+
+ccg = my.function.ga(dti.tract = dat_harmonized$CCg_rd.combat, my.ylab = "CCg RD",my.ylim = c(0.8,1.4),less=FALSE)
+
+ccb = my.function.ga(dti.tract = dat_harmonized$CCb_rd.combat, my.ylab="CCb RD",my.ylim = c(0.8,1.4),less=FALSE)
+
+ccs = my.function.ga(dti.tract = dat_harmonized$CCs_rd.combat, my.ylab="CCs RD",less=FALSE,my.ylim = c(0.8,1.4))
+
+ilf = my.function.ga(dti.tract = dat_harmonized$ILF_rd.combat, my.ylab="ILF RD",less=FALSE,my.ylim = c(0.8,1.4))
+
+ifof = my.function.ga(dti.tract = dat_harmonized$IFOF_rd.combat, my.ylab="IFOF RD",less=FALSE,my.ylim = c(0.8,1.4))
+
+af = my.function.ga(dti.tract = dat_harmonized$AF_rd.combat, my.ylab = "AF RD",my.ylim = c(0.8,1.4),less=FALSE)
+
+uf = my.function.ga(dti.tract = dat_harmonized$UF_rd.combat, my.ylab="UF RD",less=FALSE,my.ylim = c(0.8,1.4))
+
+atr = my.function.ga(dti.tract = dat_harmonized$ATR_rd.combat, my.ylab="ATR RD",less=FALSE,my.ylim = c(0.8,1.4))
+
+pt = my.function.ga(dti.tract = dat_harmonized$PT_rd.combat, my.ylab="PT RD",print.legend = FALSE,less=FALSE,estMinChronAge=FALSE,estMaxChronAge=FALSE,my.ylim = c(0.8,1.4))
+
+plot.new()
+  cColors = viridis::plasma(15)
+  
+legend(x='topleft',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,lwd=2,col=cColors[seq(1,13,by=2)],bty='n',cex=1.2)
+
+dev.off()
+
+```

@@ -1,0 +1,11 @@
+11	Uncinate-Fasciculus	UF	Association	255	192	203 FFC0CB
+1	Arcuate-fasciculus	AF	Association	255	215	0 FFD700
+9	Inferior-longitudinal-fasciculus	ILF	Association	255	0	0 FF0000
+8	Inferior-fronto-occipital-fasciculus	IFOF	Association	255	165	0 FFA500
+6	Cingulum	Ci	Limbic	173	255	47 ADFF2F
+7	Fornix	Fx	Limbic	0	255	0 00FF00
+4	Genu-of-Corpus-Callosum-	CCg	Commissural	138	43	226 8A2BE2
+3	Body-of-Corpus-Callosum	CCb	Commissural	199	21	133 C71585
+5	Splenium-of-Corpus-Callosum	CCs	Commissural	255	0	255 FF00FF
+10	Pyramidal-tract	PT	Projection	0	0	255 0000FF
+2	Anterior-thalamic-radiation	ATR	Projection	250	128	114 FA8072

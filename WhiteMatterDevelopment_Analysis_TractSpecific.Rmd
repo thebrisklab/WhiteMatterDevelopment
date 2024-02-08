@@ -1,0 +1,519 @@
+---
+title: 'White Matter Develoment: Analysis'
+author: "Benjamin Risk"
+date: "4/27/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+TO DO: Discuss whether to include sex-effects
+
+```{r}
+library(mgcv)
+library(itsadug)
+library(gratia)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+
+dat_harmonized = read.csv('dat_harmonized.csv',stringsAsFactors = TRUE)
+```
+
+
+## Tract-wise growth curves and growth rates
+
+### Fit models
+```{r}
+# FA
+model.fa.UF = gam(UF_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.UF = derivatives(model.fa.UF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.UF$Region = 'UF'
+
+model.fa.AF = gam(AF_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.AF = derivatives(model.fa.AF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.AF$Region='AF'
+
+model.fa.ILF = gam(ILF_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.ILF = derivatives(model.fa.ILF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.ILF$Region='ILF'
+
+model.fa.IFOF = gam(IFOF_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.IFOF = derivatives(model.fa.IFOF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.IFOF$Region='IFOF'
+
+model.fa.Ci = gam(Ci_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.Ci = derivatives(model.fa.Ci,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.Ci$Region='Ci'
+
+model.fa.Fx = gam(Fx_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.Fx = derivatives(model.fa.Fx,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.Fx$Region='Fx'
+
+model.fa.CCg = gam(CCg_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.CCg = derivatives(model.fa.CCg,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.CCg$Region='CCg'
+
+model.fa.CCb = gam(CCb_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.CCb = derivatives(model.fa.CCb,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.CCb$Region='CCb'
+
+model.fa.CCs = gam(CCs_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.CCs = derivatives(model.fa.CCs,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.CCs$Region='CCs'
+
+model.fa.PT = gam(PT_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.PT = derivatives(model.fa.PT,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.PT$Region='PT'
+
+model.fa.ATR = gam(ATR_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.fa.ATR = derivatives(model.fa.ATR,term='s(Corr_age)',type='central',interval='simultaneous')
+der.fa.ATR$Region='ATR'
+
+
+# MD
+model.md.UF = gam(UF_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.UF = derivatives(model.md.UF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.UF$Region = 'UF'
+
+model.md.AF = gam(AF_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.AF = derivatives(model.md.AF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.AF$Region='AF'
+
+model.md.ILF = gam(ILF_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.ILF = derivatives(model.md.ILF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.ILF$Region='ILF'
+
+model.md.IFOF = gam(IFOF_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.IFOF = derivatives(model.md.IFOF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.IFOF$Region='IFOF'
+
+model.md.Ci = gam(Ci_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.Ci = derivatives(model.md.Ci,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.Ci$Region='Ci'
+
+model.md.Fx = gam(Fx_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.Fx = derivatives(model.md.Fx,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.Fx$Region='Fx'
+
+model.md.CCg = gam(CCg_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.CCg = derivatives(model.md.CCg,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.CCg$Region='CCg'
+
+model.md.CCb = gam(CCb_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.CCb = derivatives(model.md.CCb,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.CCb$Region='CCb'
+
+model.md.CCs = gam(CCs_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.CCs = derivatives(model.md.CCs,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.CCs$Region='CCs'
+
+model.md.PT = gam(PT_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.PT = derivatives(model.md.PT,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.PT$Region='PT'
+
+model.md.ATR = gam(ATR_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.md.ATR = derivatives(model.md.ATR,term='s(Corr_age)',type='central',interval='simultaneous')
+der.md.ATR$Region='ATR'
+
+
+# AD
+model.ad.UF = gam(UF_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.UF = derivatives(model.ad.UF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.UF$Region = 'UF'
+
+model.ad.AF = gam(AF_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.AF = derivatives(model.ad.AF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.AF$Region='AF'
+
+model.ad.ILF = gam(ILF_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.ILF = derivatives(model.ad.ILF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.ILF$Region='ILF'
+
+model.ad.IFOF = gam(IFOF_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.IFOF = derivatives(model.ad.IFOF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.IFOF$Region='IFOF'
+
+model.ad.Ci = gam(Ci_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.Ci = derivatives(model.ad.Ci,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.Ci$Region='Ci'
+
+model.ad.Fx = gam(Fx_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.Fx = derivatives(model.ad.Fx,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.Fx$Region='Fx'
+
+model.ad.CCg = gam(CCg_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.CCg = derivatives(model.ad.CCg,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.CCg$Region='CCg'
+
+model.ad.CCb = gam(CCb_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.CCb = derivatives(model.ad.CCb,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.CCb$Region='CCb'
+
+model.ad.CCs = gam(CCs_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.CCs = derivatives(model.ad.CCs,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.CCs$Region='CCs'
+
+model.ad.PT = gam(PT_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.PT = derivatives(model.ad.PT,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.PT$Region='PT'
+
+model.ad.ATR = gam(ATR_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.ad.ATR = derivatives(model.ad.ATR,term='s(Corr_age)',type='central',interval='simultaneous')
+der.ad.ATR$Region='ATR'
+
+# RD
+model.rd.UF = gam(UF_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.UF = derivatives(model.rd.UF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.UF$Region = 'UF'
+
+model.rd.AF = gam(AF_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.AF = derivatives(model.rd.AF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.AF$Region='AF'
+
+model.rd.ILF = gam(ILF_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.ILF = derivatives(model.rd.ILF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.ILF$Region='ILF'
+
+model.rd.IFOF = gam(IFOF_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.IFOF = derivatives(model.rd.IFOF,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.IFOF$Region='IFOF'
+
+model.rd.Ci = gam(Ci_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.Ci = derivatives(model.rd.Ci,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.Ci$Region='Ci'
+
+model.rd.Fx = gam(Fx_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.Fx = derivatives(model.rd.Fx,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.Fx$Region='Fx'
+
+model.rd.CCg = gam(CCg_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.CCg = derivatives(model.rd.CCg,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.CCg$Region='CCg'
+
+model.rd.CCb = gam(CCb_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.CCb = derivatives(model.rd.CCb,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.CCb$Region='CCb'
+
+model.rd.CCs = gam(CCs_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.CCs = derivatives(model.rd.CCs,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.CCs$Region='CCs'
+
+model.rd.PT = gam(PT_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.PT = derivatives(model.rd.PT,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.PT$Region='PT'
+
+model.rd.ATR = gam(ATR_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+der.rd.ATR = derivatives(model.rd.ATR,term='s(Corr_age)',type='central',interval='simultaneous')
+der.rd.ATR$Region='ATR'
+```
+
+
+### Plots -- Growth curves
+
+#### No CI
+```{r}
+tiff('../Figures/TractSpecificGrowthCurvesCorrectedAge.tiff',width=1080,height=320,pointsize=18)
+
+par(mfrow=c(1,4))
+plot_smooth(model.fa.Fx,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='green4',se=0)
+
+plot_smooth(model.fa.Ci,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='chartreuse3',add=TRUE,se=0)
+
+plot_smooth(model.fa.CCg,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='purple3',add=TRUE,se=0)
+
+plot_smooth(model.fa.CCb,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='maroon3',add=TRUE,se=0)
+
+plot_smooth(model.fa.CCs,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='magenta2',add=TRUE,se=0)
+
+plot_smooth(model.fa.ILF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='red2',add=TRUE,se=0)
+
+plot_smooth(model.fa.IFOF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='tan1',add=TRUE,se=0)
+
+plot_smooth(model.fa.AF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='gold1',add=TRUE,se=0)
+
+plot_smooth(model.fa.UF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='lightpink',add=TRUE,se=0)
+
+plot_smooth(model.fa.PT,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='blue1',add=TRUE,se=0)
+
+plot_smooth(model.fa.ATR,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='coral1',add=TRUE,se=0)
+
+
+
+
+#################
+# MD
+plot_smooth(model.md.Fx,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,main='C',ylim=c(0.9,1.4),col='green4',se=0)
+
+plot_smooth(model.md.Ci,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='chartreuse3',add=TRUE,se=0)
+
+plot_smooth(model.md.CCg,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='purple3',add=TRUE,se=0)
+
+plot_smooth(model.md.CCb,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='maroon3',add=TRUE,se=0)
+
+plot_smooth(model.md.CCs,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='magenta2',add=TRUE,se=0)
+
+plot_smooth(model.md.ILF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='red2',add=TRUE,se=0)
+
+plot_smooth(model.md.IFOF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='tan1',add=TRUE,se=0)
+
+plot_smooth(model.md.AF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='gold1',add=TRUE,se=0)
+
+plot_smooth(model.md.UF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='lightpink',add=TRUE,se=0)
+
+plot_smooth(model.md.ATR,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='coral1',add=TRUE,se=0)
+
+plot_smooth(model.md.PT,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='blue1',add=TRUE,se=0)
+
+## AD
+plot_smooth(model.ad.Fx,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',ylim=c(1.1,1.7),col='green4',se=0)
+
+plot_smooth(model.ad.Ci,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='chartreuse3',add=TRUE,se=0)
+
+plot_smooth(model.ad.CCg,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='purple3',add=TRUE,se=0)
+
+plot_smooth(model.ad.CCb,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='maroon3',add=TRUE,se=0)
+
+plot_smooth(model.ad.CCs,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='magenta2',add=TRUE,se=0)
+
+plot_smooth(model.ad.ILF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='red2',add=TRUE,se=0)
+
+plot_smooth(model.ad.IFOF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='tan1',add=TRUE,se=0)
+
+plot_smooth(model.ad.AF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='gold1',add=TRUE,se=0)
+
+plot_smooth(model.ad.UF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='lightpink',add=TRUE,se=0)
+
+plot_smooth(model.ad.ATR,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='coral1',add=TRUE,se=0)
+
+plot_smooth(model.ad.PT,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='blue1',add=TRUE,se=0)
+
+## RD
+plot_smooth(model.rd.Fx,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',ylim=c(0.8,1.3),col='green4',se=0)
+
+plot_smooth(model.rd.Ci,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='chartreuse3',add=TRUE,se=0)
+
+plot_smooth(model.rd.CCg,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='purple3',add=TRUE,se=0)
+
+plot_smooth(model.rd.CCb,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='maroon3',add=TRUE,se=0)
+
+plot_smooth(model.rd.CCs,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='magenta2',add=TRUE,se=0)
+
+plot_smooth(model.rd.ILF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='red2',add=TRUE,se=0)
+
+plot_smooth(model.rd.IFOF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='tan1',add=TRUE,se=0)
+
+plot_smooth(model.rd.AF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='gold1',add=TRUE,se=0)
+
+plot_smooth(model.rd.UF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='lightpink',add=TRUE,se=0)
+
+plot_smooth(model.rd.ATR,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='coral1',add=TRUE,se=0)
+
+plot_smooth(model.rd.PT,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='blue1',add=TRUE,se=0)
+
+dev.off()
+```
+
+
+#### CI
+```{r}
+tiff('../Figures/TractSpecificGrowthCurvesCorrectedAge_Bands.tiff',width=1080,height=320,pointsize=18)
+
+par(mfrow=c(1,4))
+plot_smooth(model.fa.Fx,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,main='B',ylim=c(0.1,0.3),col='green4',sim.ci=TRUE)
+
+plot_smooth(model.fa.Ci,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='chartreuse3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.fa.CCg,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='purple3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.fa.CCb,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='maroon3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.fa.CCs,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='magenta2',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.fa.ILF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='red2',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.fa.IFOF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='tan1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.fa.AF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='gold1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.fa.UF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='lightpink',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.fa.PT,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='blue1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.fa.ATR,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="FA",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='coral1',add=TRUE,sim.ci=TRUE)
+
+
+
+
+#################
+# MD
+plot_smooth(model.md.Fx,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,main='C',ylim=c(0.9,1.4),col='green4',sim.ci=TRUE)
+
+plot_smooth(model.md.Ci,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='chartreuse3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.md.CCg,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='purple3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.md.CCb,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='maroon3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.md.CCs,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='magenta2',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.md.ILF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='red2',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.md.IFOF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='tan1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.md.AF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='gold1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.md.UF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='lightpink',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.md.ATR,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='coral1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.md.PT,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="MD",xlab="Corrected age (days)",rug=FALSE,ylim=c(0.1,0.3),col='blue1',add=TRUE,sim.ci=TRUE)
+
+## AD
+plot_smooth(model.ad.Fx,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',ylim=c(1.1,1.7),col='green4',sim.ci=TRUE)
+
+plot_smooth(model.ad.Ci,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='chartreuse3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.ad.CCg,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='purple3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.ad.CCb,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='maroon3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.ad.CCs,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='magenta2',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.ad.ILF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='red2',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.ad.IFOF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='tan1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.ad.AF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='gold1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.ad.UF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='lightpink',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.ad.ATR,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='coral1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.ad.PT,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="AD",xlab="Corrected age (days)",rug=FALSE,main='D',col='blue1',add=TRUE,sim.ci=TRUE)
+
+## RD
+plot_smooth(model.rd.Fx,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',ylim=c(0.8,1.3),col='green4',sim.ci=TRUE)
+
+plot_smooth(model.rd.Ci,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='chartreuse3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.rd.CCg,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='purple3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.rd.CCb,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='maroon3',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.rd.CCs,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='magenta2',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.rd.ILF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='red2',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.rd.IFOF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='tan1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.rd.AF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='gold1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.rd.UF,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='lightpink',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.rd.ATR,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='coral1',add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.rd.PT,view="Corr_age",print.summary=FALSE,hide.label=TRUE,ylab="RD",xlab="Corrected age (days)",rug=FALSE,main='E',col='blue1',add=TRUE,sim.ci=TRUE)
+
+dev.off()
+```
+
+
+
+
+
+
+### Plots -- rates of change
+
+```{r}
+regionsTemp = c('Fx','Ci','CCg','CCb','CCs','ILF','IFOF','AF','UF','ATR','PT')
+regionsColor=c('green4','chartreuse3','purple3','maroon3','magenta2','red2','tan1','gold1','lightpink','coral1','blue1')
+
+der.data.fa = rbind(der.fa.UF,der.fa.AF,der.fa.ILF,der.fa.IFOF,der.fa.Ci,der.fa.Fx,der.fa.CCg,der.fa.CCb,der.fa.CCs,der.fa.PT,der.fa.ATR)
+der.data.fa$Region = factor(der.data.fa$Region,levels=regionsTemp)
+
+der.data.md = rbind(der.md.UF,der.md.AF,der.md.ILF,der.md.IFOF,der.md.Ci,der.md.Fx,der.md.CCg,der.md.CCb,der.md.CCs,der.md.PT,der.md.ATR)
+der.data.md$Region = factor(der.data.md$Region,levels=regionsTemp)
+
+der.data.ad = rbind(der.ad.UF,der.ad.AF,der.ad.ILF,der.ad.IFOF,der.ad.Ci,der.ad.Fx,der.ad.CCg,der.ad.CCb,der.ad.CCs,der.ad.PT,der.ad.ATR)
+der.data.ad$Region = factor(der.data.ad$Region,levels=regionsTemp)
+
+der.data.rd = rbind(der.rd.UF,der.rd.AF,der.rd.ILF,der.rd.IFOF,der.rd.Ci,der.rd.Fx,der.rd.CCg,der.rd.CCb,der.rd.CCs,der.rd.PT,der.rd.ATR)
+der.data.rd$Region = factor(der.data.rd$Region,levels=regionsTemp)
+
+
+p1 =  der.data.fa %>%
+   ggplot(aes(y = derivative, x = data, color=Region)) +
+     geom_line(show.legend=FALSE) +
+     labs(y = "Rate of change FA",x='Corrected age (days)',title = "F") +
+     theme_classic()+geom_hline(yintercept=0)+scale_color_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+p2 =  der.data.md %>%
+   ggplot(aes(y = derivative, x = data, color=Region)) +
+     geom_line(show.legend=FALSE) +
+     labs(y = "Rate of change MD",x='Corrected age (days)',title = "G") +
+     theme_classic()+geom_hline(yintercept=0)+scale_color_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+p3 =  der.data.ad %>%
+   ggplot(aes(y = derivative, x = data, color=Region)) +
+     geom_line(show.legend=FALSE) +
+     labs(y = "Rate of change AD",x='Corrected age (days)',title = "H") +
+     theme_classic()+geom_hline(yintercept=0)+scale_color_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+p4 =  der.data.rd %>%
+   ggplot(aes(y = derivative, x = data, color=Region)) +
+     geom_line(show.legend=FALSE) +
+     labs(y = "Rate of change RD",x='Corrected age (days)',title = "I") +
+     theme_classic()+geom_hline(yintercept=0)+
+    scale_color_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+# der.md %>%
+#   ggplot(aes(y = derivative, x = data)) +
+#     geom_ribbon(aes(ymin = lower, ymax = upper),
+#                 alpha = 0.2, fill = "forestgreen") +
+#     geom_line(colour = "forestgreen", size = 1.5) +
+#     labs(y = "Partial effect",
+#          title = expression("F"))
+
+
+tiff('../Figures/TractSpecificGrowthRateCorrectedAge_nolegend.tiff',width=1080,height=320,pointsize=18)
+grid.arrange(p1,p2,p3,p4,nrow=1)
+dev.off()
+
+tiff('../Figures/TractSpecificGrowthRateCorrectedAge_Bands.tiff',width=1080,height=320,pointsize=18)
+
+
+p1 =  der.data.fa %>%
+   ggplot(aes(y = derivative, x = data, color=Region)) +
+     geom_line(show.legend=TRUE) +
+     labs(y = "Rate of change FA",x='Corrected age (days)',title = "F") +
+     theme_classic()+geom_hline(yintercept=0)+scale_color_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))+geom_ribbon(aes(ymin= lower, ymax = upper, fill=Region), alpha=0.1, linetype=0)+scale_fill_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+
+p2 =  der.data.md %>%
+   ggplot(aes(y = derivative, x = data, color=Region)) +
+     geom_line(show.legend=TRUE) +
+     labs(y = "Rate of change MD",x='Corrected age (days)',title = "G") +
+     theme_classic()+geom_hline(yintercept=0)+scale_color_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))+geom_ribbon(aes(ymin= lower, ymax = upper, fill=Region), alpha=0.1, linetype=0)+scale_fill_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+
+p3 =  der.data.ad %>%
+   ggplot(aes(y = derivative, x = data, color=Region)) +
+     geom_line(show.legend=TRUE) +
+     labs(y = "Rate of change AD",x='Corrected age (days)',title = "H") +
+     theme_classic()+geom_hline(yintercept=0)+scale_color_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))+geom_ribbon(aes(ymin= lower, ymax = upper, fill=Region), alpha=0.1, linetype=0)+scale_fill_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+
+p4 =  der.data.rd %>%
+   ggplot(aes(y = derivative, x = data, color=Region)) +
+     geom_line(show.legend=TRUE) +
+     labs(y = "Rate of change RD",x='Corrected age (days)',title = "I") +
+     theme_classic()+geom_hline(yintercept=0)+
+    scale_color_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))+geom_ribbon(aes(ymin= lower, ymax = upper, fill=Region), alpha=0.1, linetype=0)+scale_fill_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+grid.arrange(p1,p2,p3,p4,nrow=1)
+dev.off()
+
+```

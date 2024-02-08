@@ -1,0 +1,725 @@
+---
+title: 'White Matter Development: Analysis'
+author: "Benjamin Risk"
+date: "01/15/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+-correct titles on tract specific bands
+-Create new version of figure 5, separate from sex effects
+
+
+```{r}
+library(mgcv)
+library(itsadug)
+dat_harmonized = read.csv('dat_harmonized.csv',stringsAsFactors = TRUE)
+```
+
+### FA
+
+This function extracts the largest age at which there is a significant difference:
+```{r}
+# note: full term is 37
+maxChronAge = function(GAlow,GAhigh=40,model,ylab,less=TRUE) {
+  a=plot_diff(model,view='chor_age',comp=list(GA=c(GAlow,GAhigh)),sim.ci = TRUE, hide.label=TRUE,xlab='Chronological age (days)',ylab=ylab)
+  if(less) {
+  max(a$chor_age[a$est+a$sim.CI<0])
+  } else {
+    max(a$chor_age[a$est-a$sim.CI>0])
+  }
+}
+```
+
+The syntax used here is described as the functional anova in the supporting R documentation for ?ti(). 
+```{r,error=TRUE}
+model0.fa = gam(WB_fa.combat~ti(chor_age,k=9)+ti(GA,k=5)+ti(chor_age,GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+
+    
+# print out the k's:
+gam.check(model0.fa)
+# edf are all far from k', so the default k's suffice. 
+summary(model0.fa)
+
+  # alternative syntax from gam book, not the same as the syntax used in documentation:
+  model0.fa.check = gam(WB_fa.combat~s(chor_age,k=9)+s(GA,k=5)+ti(chor_age,GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+  summary(model0.fa.check)
+  # results are not identical, but very similar. Use the ti(x) + ti(z) + ti(x,z) described in ?ti()
+  
+  
+  # check it is location invariant:
+  dat_harmonized$c_chor_age = scale(dat_harmonized$chor_age,center=TRUE,scale=FALSE)
+  dat_harmonized$c_GA = scale(dat_harmonized$GA,center=TRUE,scale=FALSE)
+  
+  model0.fa.audit = gam(WB_fa.combat~ti(c_chor_age,k=9)+ti(c_GA,k=5)+ti(c_chor_age,c_GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+  summary(model0.fa.audit)
+  # good. 
+
+
+
+vis.gam(model0.fa,view=c('chor_age','GA'),theta=-45,ticktype='detailed',xlab='Chron Age',ylab='Gest Age',zlab='FA')
+
+set.seed(123)
+
+tiff('../Figures/DiffCurves_FA.tiff',width=720,height=480,pointsize=20)
+par(mfrow=c(2,3))
+(ga.35.fa=maxChronAge(GAlow=35,GAhigh=40,model=model0.fa,ylab='Est. difference in FA'))
+(ga.36.fa=maxChronAge(GAlow=36,GAhigh=40,model=model0.fa,ylab='Est. difference in FA'))
+(ga.37.fa=maxChronAge(GAlow=37,GAhigh=40,model=model0.fa,ylab='Est. difference in FA'))
+(ga.38.fa=maxChronAge(GAlow=38,GAhigh=40,model=model0.fa,ylab='Est. difference in FA'))
+(ga.39.fa=maxChronAge(GAlow=39,GAhigh=40,model=model0.fa,ylab='Est. difference in FA'))
+(ga.41.fa=maxChronAge(GAlow=40,GAhigh=41,model=model0.fa,ylab='Est. difference in FA'))
+dev.off()
+
+```
+
+### MD
+```{r,error=TRUE}
+model0.md = gam(WB_md.combat~ti(chor_age,k=9)+ti(GA,k=5)+ti(chor_age,GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+
+gam.check(model0.md) # edf are all far from k' 
+summary(model0.md)
+
+
+tiff('../Figures/DiffCurves_MD.tiff',width=720,height=480,pointsize=20)
+par(mfrow=c(2,3))
+(ga.35.md=maxChronAge(GAlow=35,GAhigh=40,model=model0.md,less=FALSE,ylab='Est. difference in MD'))
+(ga.36.md=maxChronAge(GAlow=36,GAhigh=40,model=model0.md,less=FALSE,ylab='Est. difference in MD'))
+(ga.37.md=maxChronAge(GAlow=37,GAhigh=40,model=model0.md,less=FALSE,ylab='Est. difference in MD'))
+(ga.38.md=maxChronAge(GAlow=38,GAhigh=40,model=model0.md,less=FALSE,ylab='Est. difference in MD'))
+(ga.39.md=maxChronAge(GAlow=39,GAhigh=40,model=model0.md,less=FALSE,ylab='Est. difference in MD'))
+(ga.41.md=maxChronAge(GAlow=40,GAhigh=41,model=model0.md,less=FALSE,ylab='Est. difference in MD'))
+dev.off()
+
+
+#par(mfrow=c(1,2))
+#vis.gam(model0.md,view=c('chor_age','GA'),theta=-45,ticktype='detailed',xlab='Chron Age',ylab='Gest Age',zlab='Trace')
+```
+
+There is not a significant interaction between chronological age and gestational age for md (p=0.09), and the lines look more parallel than in FA. Nonetheless, there is some evidence of an interaction, as the lines becomes somewhat closer together near 200.
+
+### AD
+```{r,error=TRUE}
+model0.ad = gam(WB_ad.combat~ti(chor_age,k=9)+ti(GA,k=5)+ti(chor_age,GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+gam.check(model0.ad) # edf are all far from k', so the default k's suffice. 
+summary(model0.ad)
+
+plot_diff(model0.ad,view='chor_age',comp=list(GA=c(36,40)),sim.ci = TRUE)
+
+tiff('../Figures/DiffCurves_AD.tiff',width=720,height=480,pointsize=20)
+par(mfrow=c(2,3))
+(ga.35.ad=maxChronAge(GAlow=35,GAhigh=40,model=model0.ad,less=FALSE,ylab='Est. difference in AD'))
+(ga.36.ad=maxChronAge(GAlow=36,GAhigh=40,model=model0.ad,less=FALSE,ylab='Est. difference in AD'))
+(ga.37.ad=maxChronAge(GAlow=37,GAhigh=40,model=model0.ad,less=FALSE,ylab='Est. difference in AD'))
+(ga.38.ad=maxChronAge(GAlow=38,GAhigh=40,model=model0.ad,less=FALSE,ylab='Est. difference in AD'))
+(ga.39.ad=maxChronAge(GAlow=39,GAhigh=40,model=model0.ad,less=FALSE,ylab='Est. difference in AD'))
+(ga.41.ad=maxChronAge(GAlow=40,GAhigh=41,model=model0.ad,less=FALSE,ylab='Est. difference in AD'))
+dev.off()
+
+vis.gam(model0.ad,view=c('chor_age','GA'),theta=-45,ticktype='detailed',xlab='Chron Age',ylab='Gest Age',zlab='AD')
+
+```
+
+### RD
+```{r,error=TRUE}
+model0.rd = gam(WB_rd.combat~ti(chor_age,k=9)+ti(GA,k=5)+ti(chor_age,GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+gam.check(model0.rd) # edf are all far from k', so the default k's suffice. 
+summary(model0.rd)
+
+vis.gam(model0.rd,view=c('chor_age','GA'),theta=-45,ticktype='detailed',xlab='Chron Age',ylab='Gest Age',zlab='RD')
+
+tiff('../Figures/DiffCurves_RD.tiff',width=720,height=480,pointsize=20)
+par(mfrow=c(2,3))
+(ga.35.rd=maxChronAge(GAlow=35,GAhigh=40,model=model0.rd,less=FALSE,ylab='Est. difference in RD'))
+(ga.36.rd=maxChronAge(GAlow=36,GAhigh=40,model=model0.rd,less=FALSE,ylab='Est. difference in RD'))
+(ga.37.rd=maxChronAge(GAlow=37,GAhigh=40,model=model0.rd,less=FALSE,ylab='Est. difference in RD'))
+(ga.38.rd=maxChronAge(GAlow=38,GAhigh=40,model=model0.rd,less=FALSE,ylab='Est. difference in RD'))
+(ga.39.rd=maxChronAge(GAlow=39,GAhigh=40,model=model0.rd,less=FALSE,ylab='Est. difference in RD'))
+(ga.41.rd=maxChronAge(GAlow=40,GAhigh=41,model=model0.rd,less=FALSE,ylab='Est. difference in RD'))
+dev.off()
+
+```
+There is a trend interaction between chronological and gestation age on RD, but overall the lines are parallel. 
+
+### Plots of gestational age at chronological age = 30:
+```{r}
+
+tiff('../Figures/GestationalAge_30_90_180.tiff',width=1080,height=640,pointsize=18)
+par(mfrow=c(2,4))
+
+focal_chron=30
+plot_smooth(model0.fa, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain FA',xlab='Gestational age at birth (weeks)'
+, hide.label=TRUE,main='A',xlim=c(35,41),ylim=c(0.125,0.21),rug=FALSE,col='slateblue1')
+
+focal_chron=90
+plot_smooth(model0.fa, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain FA ',xlab='Gestational age at birth (weeks)'
+, hide.label=TRUE,main='A',xlim=c(35,41),rug=FALSE,col='slateblue3',add=TRUE)
+
+focal_chron=180
+plot_smooth(model0.fa, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain FA ',xlab='Gestational age at birth (weeks)'
+, hide.label=TRUE,main='A',xlim=c(35,41),rug=FALSE,col='darkslateblue',add=TRUE)
+
+legend(x='bottomright',legend=c('30 days','90 days','180 days'),lty=1,lwd=2,col=c('slateblue1','slateblue3','darkslateblue'),bty='n')
+
+focal_chron=30
+plot_smooth(model0.md, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain MD',xlab='Gestational age at birth (weeks)',hide.label=TRUE,main='B',xlim=c(35,41),rug=FALSE,col='slateblue1',ylim=c(0.95,1.4))
+
+focal_chron=90
+plot_smooth(model0.md, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain MD ',xlab='Gestational age at birth (weeks)',hide.label=TRUE,main='B',xlim=c(35,41),rug=FALSE,col='slateblue3',ylim=c(0.95,1.4),add=TRUE)
+
+focal_chron=180
+plot_smooth(model0.md, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain MD',xlab='Gestational age at birth (weeks)',hide.label=TRUE,main='B',xlim=c(35,41),rug=FALSE,col='darkslateblue',ylim=c(0.95,1.4),add=TRUE)
+
+focal_chron=30
+plot_smooth(model0.ad, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain AD',xlab='Gestational age at birth (weeks)',hide.label=TRUE,main='C',xlim=c(35,41),rug=FALSE,col='slateblue1',ylim=c(1.2,1.6))
+
+focal_chron=90
+plot_smooth(model0.ad, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain AD  age',xlab='Gestational age at birth (weeks)',hide.label=TRUE,main='C',xlim=c(35,41),rug=FALSE,col='slateblue3',add=TRUE)
+
+focal_chron=180
+plot_smooth(model0.ad, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain AD',xlab='Gestational age at birth (weeks)',hide.label=TRUE,main='C',xlim=c(35,41),rug=FALSE,col='darkslateblue',add=TRUE)
+
+focal_chron=30
+plot_smooth(model0.rd, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain RD',xlab='Gestational age at birth (weeks)',hide.label=TRUE,main='D',xlim=c(35,41),rug=FALSE,col='slateblue1',ylim=c(0.85,1.3))
+
+focal_chron=90
+plot_smooth(model0.rd, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain RD',xlab='Gestational age at birth (weeks)',hide.label=TRUE,main='D',xlim=c(35,41),rug=FALSE,col='slateblue3',add=TRUE)
+
+focal_chron=180
+plot_smooth(model0.rd, view="GA",cond=list(chor_age=focal_chron),lwd=2,sim.ci=TRUE,ylab='Whole-brain RD',xlab='Gestational age at birth (weeks)',hide.label=TRUE,main='D',xlim=c(35,41),rug=FALSE,col='darkslateblue',add=TRUE)
+
+### Plots of growth curves for the four dti measures at different GA:
+
+#tiff('../Figures/GestandChronAgeFAMDADRD.tiff',width=1080,height=320,pointsize=18)
+#par(mfrow=c(1,4))
+
+######### FA:
+cColors = viridis::plasma(15)
+plot_smooth(model0.fa, view="chor_age",cond=list(GA=35),col=cColors[1],rug=FALSE,ylim=c(0.12,0.205),lwd=2,se=0,ylab='Whole-brain FA',xlab='Chronological age (days)',hide.label=TRUE,main='E',xlim=c(10,202))
+
+plot_smooth(model0.fa, view="chor_age",cond=list(GA=36),col=cColors[3],add=TRUE,rug=FALSE,lwd=2,se=0)
+
+plot_smooth(model0.fa, view="chor_age",  cond=list(GA=37),col=cColors[5],add=TRUE,rug=FALSE,lwd=2,se=0)
+
+plot_smooth(model0.fa, view="chor_age", se=0, cond=list(GA=38),col=cColors[7],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.fa, view="chor_age", se=0, cond=list(GA=39),col=cColors[9],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.fa, view="chor_age", se=0, cond=list(GA=40),col=cColors[11],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.fa, view="chor_age", se=0, cond=list(GA=41),col=cColors[13],add=TRUE,rug=FALSE,lwd=2)
+
+legend(x='bottomright',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,lwd=2,col=cColors[seq(1,13,by=2)],bty='n',cex=1)
+
+abline(v=ga.35.fa,col=cColors[1],lwd=2,lty=2)
+abline(v=ga.36.fa,col=cColors[3],lwd=2,lty=2)
+abline(v=ga.37.fa,col=cColors[5],lwd=2,lty=2)
+abline(v=ga.38.fa,col=cColors[7],lwd=2,lty=2)
+abline(v=ga.39.fa,col=cColors[9],lwd=2,lty=2)
+abline(v=ga.41.fa,col=cColors[13],lwd=2,lty=2)
+
+
+######### MD:
+plot_smooth(model0.md, view="chor_age", se=0, cond=list(GA=35),ylab='Whole-brain MD',xlab='Chronological age (days)',hide.label=TRUE,col=cColors[1],rug=FALSE,main='F',lwd=2,ylim=c(1,1.5))
+
+plot_smooth(model0.md, view="chor_age", se=0, cond=list(GA=36),col=cColors[3],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.md, view="chor_age", se=0, cond=list(GA=37),col=cColors[5],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.md, view="chor_age", se=0, cond=list(GA=38),col=cColors[7],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.md, view="chor_age", se=0, cond=list(GA=39),col=cColors[9],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.md, view="chor_age", se=0, cond=list(GA=40),col=cColors[11],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.md, view="chor_age", se=0, cond=list(GA=41),col=cColors[13],add=TRUE,rug=FALSE,lwd=2)
+
+#legend(x='topright',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,col=cColors[seq(1,13,by=2)],bty='n',cex=1,lwd=2)
+
+abline(v=ga.35.md,col=cColors[1],lwd=2,lty=2)
+abline(v=ga.36.md,col=cColors[3],lwd=2,lty=2)
+abline(v=ga.37.md,col=cColors[5],lwd=2,lty=2)
+abline(v=ga.38.md,col=cColors[7],lwd=2,lty=2)
+abline(v=ga.39.md,col=cColors[9],lwd=2,lty=2)
+abline(v=ga.41.md,col=cColors[13],lwd=2,lty=2)
+
+
+######### AD:
+plot_smooth(model0.ad, view="chor_age", se=0,ylab='Whole-brain AD',xlab='Chronological age (days)',hide.label=TRUE, cond=list(GA=35),col=cColors[1],rug=FALSE,main='G',lwd=2,ylim=c(1.2,1.65))
+
+plot_smooth(model0.ad, view="chor_age", se=0, cond=list(GA=36),col=cColors[3],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.ad, view="chor_age", se=0, cond=list(GA=37),col=cColors[5],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.ad, view="chor_age", se=0, cond=list(GA=38),col=cColors[7],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.ad, view="chor_age", se=0, cond=list(GA=39),col=cColors[9],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.ad, view="chor_age", se=0, cond=list(GA=40),col=cColors[11],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.ad, view="chor_age", se=0, cond=list(GA=41),col=cColors[13],add=TRUE,rug=FALSE)
+
+#legend(x='topright',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,col=cColors[seq(1,13,by=2)],bty='n',cex=1,lwd=2)
+abline(v=ga.35.ad,col=cColors[1],lwd=2,lty=2)
+abline(v=ga.36.ad,col=cColors[3],lwd=2,lty=2)
+abline(v=ga.37.ad,col=cColors[5],lwd=2,lty=2)
+abline(v=ga.38.ad,col=cColors[7],lwd=2,lty=2)
+abline(v=ga.39.ad,col=cColors[9],lwd=2,lty=2)
+abline(v=ga.41.ad,col=cColors[13],lwd=2,lty=2)
+
+
+
+######### RD:
+plot_smooth(model0.rd, view="chor_age", se=0, cond=list(GA=35),hide.label=TRUE,xlab='Chronological age (days)',ylab='Whole-brain RD',col=cColors[1],add=FALSE,rug=FALSE, ylim=c(0.9,1.35),main='H',lwd=2)
+
+plot_smooth(model0.rd, view="chor_age", se=0, cond=list(GA=36),col=cColors[3],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.rd, view="chor_age", se=0, cond=list(GA=37),col=cColors[5],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.rd, view="chor_age", se=0, cond=list(GA=38),col=cColors[7],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.rd, view="chor_age", se=0, cond=list(GA=39),col=cColors[9],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.rd, view="chor_age", se=0, cond=list(GA=40),col=cColors[11],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.rd, view="chor_age", se=0, cond=list(GA=41),col=cColors[13],add=TRUE,rug=FALSE,lwd=2)
+#b+legend(x='topright',legend=c('GA=32','GA=34','GA=36','GA=38','GA=40'),lty=1,col=cColors[seq(1,11,by=2)],bty='n',cex=0.5)
+
+#legend(x='topright',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,col=cColors[seq(1,13,by=2)],bty='n',cex=1,lwd=2)
+
+abline(v=ga.35.rd,col=cColors[1],lwd=2,lty=2)
+abline(v=ga.36.rd,col=cColors[3],lwd=2,lty=2)
+abline(v=ga.37.rd,col=cColors[5],lwd=2,lty=2)
+abline(v=ga.38.rd,col=cColors[7],lwd=2,lty=2)
+abline(v=ga.39.rd,col=cColors[9],lwd=2,lty=2)
+abline(v=ga.41.rd,col=cColors[13],lwd=2,lty=2)
+
+
+dev.off()
+```
+
+## Interaction between GA and corrected age
+Next, we check whether there is a significant interaction between gestational age and corrected age in FA. 
+```{r}
+model0.corr.fa = gam(WB_fa.combat~ti(Corr_age,k=9)+ti(GA,k=5)+ti(Corr_age,GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+gam.check(model0.corr.fa)
+summary(model0.corr.fa)
+
+model0.corr.md = gam(WB_md.combat~ti(Corr_age,k=9)+ti(GA,k=5)+ti(Corr_age,GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+gam.check(model0.corr.md)
+summary(model0.corr.md)
+
+model0.corr.ad = gam(WB_ad.combat~ti(Corr_age,k=9)+ti(GA,k=5)+ti(Corr_age,GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+gam.check(model0.corr.ad)
+summary(model0.corr.ad)
+
+
+model0.corr.rd = gam(WB_rd.combat~ti(Corr_age,k=9)+ti(GA,k=5)+ti(Corr_age,GA,k=c(9,5))+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+gam.check(model0.corr.rd)
+summary(model0.corr.rd)
+```
+
+Main effect of gestational age is no longer significant. However, some interaction effects now appear in the interaction term with gestational age. Create plots to examine. 
+
+```{r}
+tiff('../Figures/GestandCorrectedAgeFAMDADRD.tiff',width=1080,height=320,pointsize=18)
+par(mfrow=c(1,4))
+
+######### FA:
+cColors = viridis::plasma(15)
+plot_smooth(model0.corr.fa, view="Corr_age",cond=list(GA=35),col=cColors[1],rug=FALSE,ylim=c(0.12,0.205),lwd=2,se=0,ylab='Whole-brain FA',xlab='Corrected age (days)',hide.label=TRUE,main='A',xlim=c(10,202))
+
+plot_smooth(model0.corr.fa, view="Corr_age",cond=list(GA=36),col=cColors[3],add=TRUE,rug=FALSE,lwd=2,se=0)
+
+plot_smooth(model0.corr.fa, view="Corr_age",  cond=list(GA=37),col=cColors[5],add=TRUE,rug=FALSE,lwd=2,se=0)
+
+plot_smooth(model0.corr.fa, view="Corr_age", se=0, cond=list(GA=38),col=cColors[7],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.fa, view="Corr_age", se=0, cond=list(GA=39),col=cColors[9],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.fa, view="Corr_age", se=0, cond=list(GA=40),col=cColors[11],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.fa, view="Corr_age", se=0, cond=list(GA=41),col=cColors[13],add=TRUE,rug=FALSE,lwd=2)
+
+legend(x='bottomright',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,lwd=2,col=cColors[seq(1,13,by=2)],bty='n',cex=1)
+
+# abline(v=ga.35.fa,col=cColors[1],lwd=2,lty=2)
+# abline(v=ga.36.fa,col=cColors[3],lwd=2,lty=2)
+# abline(v=ga.37.fa,col=cColors[5],lwd=2,lty=2)
+# abline(v=ga.38.fa,col=cColors[7],lwd=2,lty=2)
+# abline(v=ga.39.fa,col=cColors[9],lwd=2,lty=2)
+# abline(v=ga.41.fa,col=cColors[13],lwd=2,lty=2)
+
+
+######### MD:
+plot_smooth(model0.corr.md, view="Corr_age", se=0, cond=list(GA=35),ylab='Whole-brain MD',xlab='Corrected age (days)',hide.label=TRUE,col=cColors[1],rug=FALSE,main='B',lwd=2,ylim=c(1,1.5))
+
+plot_smooth(model0.corr.md, view="Corr_age", se=0, cond=list(GA=36),col=cColors[3],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.md, view="Corr_age", se=0, cond=list(GA=37),col=cColors[5],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.md, view="Corr_age", se=0, cond=list(GA=38),col=cColors[7],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.md, view="Corr_age", se=0, cond=list(GA=39),col=cColors[9],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.md, view="Corr_age", se=0, cond=list(GA=40),col=cColors[11],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.md, view="Corr_age", se=0, cond=list(GA=41),col=cColors[13],add=TRUE,rug=FALSE,lwd=2)
+
+#legend(x='topright',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,col=cColors[seq(1,13,by=2)],bty='n',cex=1,lwd=2)
+
+# abline(v=ga.35.md,col=cColors[1],lwd=2,lty=2)
+# abline(v=ga.36.md,col=cColors[3],lwd=2,lty=2)
+# abline(v=ga.37.md,col=cColors[5],lwd=2,lty=2)
+# abline(v=ga.38.md,col=cColors[7],lwd=2,lty=2)
+# abline(v=ga.39.md,col=cColors[9],lwd=2,lty=2)
+# abline(v=ga.41.md,col=cColors[13],lwd=2,lty=2)
+
+######### AD:
+plot_smooth(model0.corr.ad, view="Corr_age", se=0,ylab='Whole-brain AD',xlab='Corrected age (days)',hide.label=TRUE, cond=list(GA=35),col=cColors[1],rug=FALSE,main='C',lwd=2,ylim=c(1.2,1.65))
+
+plot_smooth(model0.corr.ad, view="Corr_age", se=0, cond=list(GA=36),col=cColors[3],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.ad, view="Corr_age", se=0, cond=list(GA=37),col=cColors[5],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.ad, view="Corr_age", se=0, cond=list(GA=38),col=cColors[7],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.ad, view="Corr_age", se=0, cond=list(GA=39),col=cColors[9],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.ad, view="Corr_age", se=0, cond=list(GA=40),col=cColors[11],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.ad, view="Corr_age", se=0, cond=list(GA=41),col=cColors[13],add=TRUE,rug=FALSE)
+
+#legend(x='topright',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,col=cColors[seq(1,13,by=2)],bty='n',cex=1,lwd=2)
+# abline(v=ga.35.ad,col=cColors[1],lwd=2,lty=2)
+# abline(v=ga.36.ad,col=cColors[3],lwd=2,lty=2)
+# abline(v=ga.37.ad,col=cColors[5],lwd=2,lty=2)
+# abline(v=ga.38.ad,col=cColors[7],lwd=2,lty=2)
+# abline(v=ga.39.ad,col=cColors[9],lwd=2,lty=2)
+# abline(v=ga.41.ad,col=cColors[13],lwd=2,lty=2)
+
+
+
+######### RD:
+plot_smooth(model0.corr.rd, view="Corr_age", se=0, cond=list(GA=35),hide.label=TRUE,xlab='Corrected age (days)',ylab='Whole-brain RD',col=cColors[1],add=FALSE,rug=FALSE, ylim=c(0.9,1.35),main='D',lwd=2)
+
+plot_smooth(model0.corr.rd, view="Corr_age", se=0, cond=list(GA=36),col=cColors[3],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.rd, view="Corr_age", se=0, cond=list(GA=37),col=cColors[5],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.rd, view="Corr_age", se=0, cond=list(GA=38),col=cColors[7],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.rd, view="Corr_age", se=0, cond=list(GA=39),col=cColors[9],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.rd, view="Corr_age", se=0, cond=list(GA=40),col=cColors[11],add=TRUE,rug=FALSE,lwd=2)
+
+plot_smooth(model0.corr.rd, view="Corr_age", se=0, cond=list(GA=41),col=cColors[13],add=TRUE,rug=FALSE,lwd=2)
+
+#legend(x='topright',legend=c('GA=35','GA=36','GA=37','GA=38','GA=39','GA=40','GA=41'),lty=1,col=cColors[seq(1,13,by=2)],bty='n',cex=1,lwd=2)
+
+# abline(v=ga.35.rd,col=cColors[1],lwd=2,lty=2)
+# abline(v=ga.36.rd,col=cColors[3],lwd=2,lty=2)
+# abline(v=ga.37.rd,col=cColors[5],lwd=2,lty=2)
+# abline(v=ga.38.rd,col=cColors[7],lwd=2,lty=2)
+# abline(v=ga.39.rd,col=cColors[9],lwd=2,lty=2)
+# abline(v=ga.41.rd,col=cColors[13],lwd=2,lty=2)
+
+dev.off()
+```
+
+
+## Sex effects 
+
+### Sex models
+```{r}
+
+model.sex.fa = gam(WB_fa.combat~s(Corr_age,by=Sex)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+summary(model.sex.fa)
+
+model.sex.md = gam(WB_md.combat~s(Corr_age,by=Sex)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+summary(model.sex.md)
+
+model.sex.ad = gam(WB_ad.combat~s(Corr_age)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+summary(model.sex.ad)
+
+model.sex.rd = gam(WB_rd.combat~s(Corr_age,by=Sex)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+summary(model.sex.rd)
+```
+
+### Examine differences
+```{r}
+plot_diff(model.sex.fa,view='Corr_age',comp=list(Sex=c('F','M')),ylab='Difference in FA',xlab='Corrected age (days)',hide.label=TRUE,sim.ci=TRUE)
+
+plot_diff(model.sex.md,view='Corr_age',comp=list(Sex=c('F','M')),ylab='Difference in MD',xlab='Corrected age (days)',hide.label=TRUE,sim.ci=TRUE)
+
+plot_diff(model.sex.ad,view='Corr_age',comp=list(Sex=c('F','M')),ylab='Difference in AD',xlab='Corrected age (days)',hide.label=TRUE,sim.ci=TRUE)
+
+plot_diff(model.sex.rd,view='Corr_age',comp=list(Sex=c('F','M')),ylab='Difference in RD',xlab='Corrected age (days)',hide.label=TRUE,sim.ci=TRUE)
+```
+Sex differences from 2 to 27 weeks are significant in FA.
+
+Sex differences are significant in AD.
+
+### Plots
+```{r}
+tiff('../Figures/CorrectedAgeBySexWB.tiff',width=1080,height=320,pointsize=18)
+par(mfrow=c(1,4))
+plot_smooth(model.sex.fa, view="Corr_age", cond=list(Sex='M'), col='blue',print.summary=FALSE,hide.label=TRUE,ylab='Whole-brain FA',xlab='Corrected age (days)',sim.ci=TRUE,main='A')
+plot_smooth(model.sex.fa,view="Corr_age",cond=list(Sex='F'),col='red',print.summary=FALSE,add=TRUE,sim.ci=TRUE)
+legend(x='bottomright',legend=c('Males','Females'),lty=1,col=c('blue','red'),bty='n',cex=1,lwd=2)
+abline(v=27,lty=2,col='red',lwd=2)
+
+plot_smooth(model.sex.md, view="Corr_age", cond=list(Sex='M'), col='blue',print.summary=FALSE,hide.label=TRUE,ylab='Whole-brain MD',xlab='Corrected age (days)',sim.ci=TRUE,main='B')
+plot_smooth(model.sex.md,view="Corr_age",cond=list(Sex='F'),col='red',print.summary=FALSE,add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.sex.ad, view="Corr_age", cond=list(Sex='M'), col='blue',print.summary=FALSE,hide.label=TRUE,ylab='Whole-brain AD',xlab='Corrected age (days)',sim.ci=TRUE,main='C')
+plot_smooth(model.sex.ad,view="Corr_age",cond=list(Sex='F'),col='red',print.summary=FALSE,add=TRUE,sim.ci=TRUE)
+
+plot_smooth(model.sex.rd, view="Corr_age", cond=list(Sex='M'), col='blue',print.summary=FALSE,hide.label=TRUE,ylab='Whole-brain RD',xlab='Corrected age (days)',sim.ci=TRUE,main='D')
+plot_smooth(model.sex.rd,view="Corr_age",cond=list(Sex='F'),col='red',print.summary=FALSE,add=TRUE,sim.ci=TRUE)
+dev.off()
+```
+
+## Growth rates
+```{r}
+model.fa.simple = gam(WB_fa.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+model.md.simple = gam(WB_md.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+model.ad.simple = gam(WB_ad.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+model.rd.simple = gam(WB_rd.combat~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+
+tiff('../Figures/GrowthCurveCorrectedAge.tiff',width=1080,height=320,pointsize=18)
+par(mfrow=c(1,4))
+plot_smooth(model.fa.simple,view="Corr_age",print.summary=FALSE,hide.label=TRUE,sim.ci=TRUE,ylab="Whole-brain FA",xlab="Corrected age (days)",rug=FALSE,main='A',col='slateblue',ylim=c(0.125,0.21))
+
+# add subject-level data:
+subjectList = unique(dat_harmonized$Unique_ID)
+for (i in subjectList) {
+  temp = dat_harmonized[dat_harmonized$Unique_ID==i,]
+  lines(temp$WB_fa.combat~temp$Corr_age,col='gray',type='b',pch=20)
+}
+plot_smooth(model.fa.simple,view="Corr_age",print.summary=FALSE,hide.label=TRUE,sim.ci=TRUE,ylab="Whole-brain FA",xlab="Corrected age (days)",rug=FALSE,main='A',col='slateblue',ylim=c(0.125,0.21),add=TRUE)
+  
+
+plot_smooth(model.md.simple,view="Corr_age",print.summary=FALSE,hide.label=TRUE,sim.ci=TRUE,ylab="Whole-brain MD",xlab="Corrected age (days)",rug=FALSE,main='B',col='slateblue',ylim=c(0.875,1.35))
+for (i in subjectList) {
+  temp = dat_harmonized[dat_harmonized$Unique_ID==i,]
+  lines(temp$WB_md.combat~temp$Corr_age,col='gray',type='b',pch=20)
+}
+plot_smooth(model.md.simple,view="Corr_age",print.summary=FALSE,hide.label=TRUE,sim.ci=TRUE,ylab="Whole-brain MD",xlab="Corrected age (days)",rug=FALSE,main='B',col='slateblue',add=TRUE)
+
+
+
+plot_smooth(model.ad.simple,view="Corr_age",print.summary=FALSE,hide.label=TRUE,sim.ci=TRUE,ylab="Whole-brain AD",xlab="Corrected age (days)",rug=FALSE,main='C',col='slateblue',ylim=c(1.1,1.6))
+for (i in subjectList) {
+  temp = dat_harmonized[dat_harmonized$Unique_ID==i,]
+  lines(temp$WB_ad.combat~temp$Corr_age,col='gray',type='b',pch=20)
+}
+plot_smooth(model.ad.simple,view="Corr_age",print.summary=FALSE,hide.label=TRUE,sim.ci=TRUE,ylab="Whole-brain AD",xlab="Corrected age (days)",rug=FALSE,main='C',col='slateblue',add=TRUE)
+
+
+plot_smooth(model.rd.simple,view="Corr_age",print.summary=FALSE,hide.label=TRUE,sim.ci=TRUE,ylab="Whole-brain RD",xlab="Corrected age (days)",rug=FALSE,main='D',col='slateblue',ylim=c(0.8,1.3))
+for (i in subjectList) {
+  temp = dat_harmonized[dat_harmonized$Unique_ID==i,]
+  lines(temp$WB_rd.combat~temp$Corr_age,col='gray',type='b',pch=20)
+}
+
+plot_smooth(model.rd.simple,view="Corr_age",print.summary=FALSE,hide.label=TRUE,sim.ci=TRUE,ylab="Whole-brain RD",xlab="Corrected  age (days)",rug=FALSE,main='D',col='slateblue',add=TRUE)
+
+dev.off()
+
+
+
+library(gratia)
+library(ggplot2)
+
+
+#dat_harmonized_GA40 = dat_harmonized
+#dat_harmonized_GA40$GA = 40
+#der.fa = derivatives(model0.corr.fa,newdata=dat_harmonized_GA40,term='ti(Corr_age)',type='central',interval='simultaneous',main='E',xlab='Corrected age (days)')
+#draw(der.fa)
+
+der.fa = derivatives(model.fa.simple,term='s(Corr_age)',type='central',interval='simultaneous',xlab='Corrected age (days)')
+
+der.md = derivatives(model.md.simple,term='s(Corr_age)',type='central',interval='simultaneous',xlab='Corrected age (days)')
+
+der.ad = derivatives(model.ad.simple,term='s(Corr_age)',type='central',interval='simultaneous',xlab='Corrected age (days)')
+
+der.rd = derivatives(model.rd.simple,term='s(Corr_age)',type='central',interval='simultaneous',xlab='Corrected age (days)')
+
+# p1=draw(der.fa,col='slateblue')+labs(title='E',x='Corrected age (days)',y='Derivative for FA')+theme_classic()
+# p2=draw(der.md)+labs(title='F',x='Corrected age (days)',y='Derivative for MD')+theme_classic()
+# p3=draw(der.ad)+labs(title='G',x='Corrected age (days)',y='Derivative for AD')+theme_classic()
+# p4=draw(der.rd)+labs(title='H',x='Corrected age (days)',y='Derivative for RD')+theme_classic()
+
+library(dplyr)
+# make ggplot2 have centered and bold titles:
+theme_update(plot.title = element_text(hjust = 0.5,face='bold')) # this didn't work for me
+
+p1 =  der.fa %>%
+   ggplot(aes(y = derivative, x = data)) +
+     geom_ribbon(aes(ymin = lower, ymax = upper),
+                 alpha = 0.2, fill = "slateblue") +
+     geom_line(colour = "slateblue", size = 1.5) +
+     labs(y = "Rate of change FA",x='Corrected age (days)',title = "E") +
+     theme_classic()+geom_hline(yintercept=0)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+p2 =  der.md %>%
+   ggplot(aes(y = derivative, x = data)) +
+     geom_ribbon(aes(ymin = lower, ymax = upper),
+                 alpha = 0.2, fill = "slateblue") +
+     geom_line(colour = "slateblue", size = 1.5) +
+     labs(y = "Rate of change MD",x='Corrected age (days)',title = "F") +
+     theme_classic()+geom_hline(yintercept=0)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+p3 =  der.ad %>%
+   ggplot(aes(y = derivative, x = data)) +
+     geom_ribbon(aes(ymin = lower, ymax = upper),
+                 alpha = 0.2, fill = "slateblue") +
+     geom_line(colour = "slateblue", size = 1.5) +
+     labs(y = "Rate of change AD",x='Corrected age (days)',title = "G") +
+     theme_classic()+geom_hline(yintercept=0)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+p4 =  der.rd %>%
+   ggplot(aes(y = derivative, x = data)) +
+     geom_ribbon(aes(ymin = lower, ymax = upper),
+                 alpha = 0.2, fill = "slateblue") +
+     geom_line(colour = "slateblue", size = 1.5) +
+     labs(y = "Rate of change RD",x='Corrected age (days)',title = "H") +
+     theme_classic()+geom_hline(yintercept=0)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+library(gridExtra)
+tiff('../Figures/GrowthRateCorrectedAge.tiff',width=1080,height=320,pointsize=18)
+grid.arrange(p1,p2,p3,p4,nrow=1)
+dev.off()
+```
+
+### Growth rates for text
+
+```{r}
+dat_harmonized_temp = dat_harmonized[rep(1,nrow(der.fa)),]
+dat_harmonized_temp$Corr_age=der.fa$data
+
+der.fa$predict = predict(model.fa.simple,newdata = dat_harmonized_temp)
+
+# initial growth rate:
+der.fa[1,]
+  
+  npredict = nrow(der.fa)
+  # check incremented by 1:
+  sum(abs(der.fa$data[2:npredict]-der.fa$data[1:(npredict-1)]-1)) # should be 0
+    # approximately zero, looks good
+  
+  der.fa$first_order_approx=NA
+  der.fa$first_order_approx[2:npredict] = der.fa$predict[2:npredict]-der.fa$predict[1:(npredict-1)]
+
+  # eyeball if similar
+  plot(der.fa$derivative~der.fa$first_order_approx)
+  # looks good
+
+
+  der.fa$fprimef = der.fa$derivative/der.fa$predict
+  
+# Calculate the percent change 
+der.fa$perc_change = NA
+der.fa$perc_change[1:(npredict-1)] = 100*der.fa$first_order_approx[2:npredict]/der.fa$predict[1:(npredict-1)]
+  
+der.md$predict = predict(model.md.simple,newdata = dat_harmonized_temp)
+der.md$first_order_approx=NA
+der.md$first_order_approx[2:npredict] = der.md$predict[2:npredict]-der.md$predict[1:(npredict-1)]  
+der.md$perc_change = NA
+der.md$perc_change[1:(npredict-1)] = 100*der.md$first_order_approx[2:npredict]/der.md$predict[1:(npredict-1)]
+
+der.ad$predict = predict(model.ad.simple,newdata = dat_harmonized_temp)
+der.ad$first_order_approx=NA
+der.ad$first_order_approx[2:npredict] = der.ad$predict[2:npredict]-der.ad$predict[1:(npredict-1)]  
+der.ad$perc_change = NA
+der.ad$perc_change[1:(npredict-1)] = 100*der.ad$first_order_approx[2:npredict]/der.ad$predict[1:(npredict-1)]
+
+der.rd$predict = predict(model.rd.simple,newdata = dat_harmonized_temp)
+der.rd$first_order_approx=NA
+der.rd$first_order_approx[2:npredict] = der.rd$predict[2:npredict]-der.rd$predict[1:(npredict-1)]  
+der.rd$perc_change = NA
+der.rd$perc_change[1:(npredict-1)] = 100*der.rd$first_order_approx[2:npredict]/der.rd$predict[1:(npredict-1)]
+
+# initial growth rate percentages:
+der.fa$perc_change[1]
+der.md$perc_change[1]
+der.ad$perc_change[1]
+der.rd$perc_change[1]
+
+# fa, growth rate at 100 days where starts to flatten
+der.fa[99,c('data','derivative','perc_change')]
+der.fa$data[149]
+der.fa$data[199]
+mean(der.fa$perc_change[149:199])
+
+der.md$perc_change[1]
+der.ad$perc_change[1]
+der.rd$perc_change[1]
+
+der.md[69,c('data','perc_change')]
+der.ad[69,c('data','perc_change')]
+der.rd[69,c('data','perc_change')]
+
+# average growth rate 160 to 200
+der.md[159,c('data','perc_change')]
+mean(der.md$perc_change[159:199])
+mean(der.ad$perc_change[159:199])
+mean(der.rd$perc_change[159:199])
+
+
+```
+
+### Fold analysis:
+```{r}
+der.fa.6mos = der.fa$derivative[round(der.fa$data)==180]
+der.fa$fold = der.fa$derivative/der.fa.6mos
+
+der.md.6mos = der.md$derivative[round(der.md$data)==180]
+der.md$fold = der.md$derivative/der.md.6mos
+
+der.ad.6mos = der.ad$derivative[round(der.ad$data)==180]
+der.ad$fold = der.ad$derivative/der.ad.6mos
+
+der.rd.6mos = der.rd$derivative[round(der.rd$data)==180]
+der.rd$fold = der.rd$derivative/der.rd.6mos
+
+der.fa$fold[1]
+der.ad$fold[1]
+der.rd$fold[1]
+der.md$fold[1]
+
+p1 =  der.fa %>%
+   ggplot(aes(y = fold, x = data)) +
+     geom_line(colour = "slateblue", size = 1.5) +
+     labs(y = "(FA Rate of Change)/(FA Rate of Change at 6 mos)",x='Corrected age (days)',title = "A") +
+     theme_classic()+geom_vline(xintercept=180)+theme(plot.title = element_text(hjust = 0.5,face='bold'))+ylim(0.5,7.25)
+
+p2 =  der.md %>%
+   ggplot(aes(y = fold, x = data)) +
+     geom_line(colour = "slateblue", size = 1.5) +
+     labs(y = "(MD Rate of Change)/(MD Rate of Change at 6 mos)",x='Corrected age (days)',title = "B") +
+     theme_classic()+geom_vline(xintercept=180)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+
+p3 =  der.ad %>%
+   ggplot(aes(y = fold, x = data)) +
+     geom_line(colour = "slateblue", size = 1.5) +
+     labs(y = "(AD Rate of Change)/(AD Rate of Change at 6 mos)",x='Corrected age (days)',title = "C") +
+     theme_classic()+geom_vline(xintercept=180)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+
+p4 =  der.rd %>%
+   ggplot(aes(y = fold, x = data)) +
+     geom_line(colour = "slateblue", size = 1.5) +
+     labs(y = "(RD Rate of Change)/(RD Rate of Change at 6 mos)",x='Corrected age (days)',title = "D") +
+     theme_classic()+geom_vline(xintercept=180)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+tiff('../Figures/FoldAnalysisWB.tiff',width=1080,height=320,pointsize=18)
+grid.arrange(p1,p2,p3,p4,nrow=1)
+dev.off()
+
+```

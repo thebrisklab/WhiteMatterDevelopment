@@ -1,7 +1,8 @@
 ---
 title: "White Matter Development Data Preparation and Harmonization"
 author: "Benjamin Risk"
-date: "2/14/2022"
+# date: "2/14/2022"
+date: 01/15/2024
 output: html_document
 ---
 
@@ -52,7 +53,6 @@ dat2 = dat[,c('GA','chor_age','Corr_age','Sex','Unique_ID','DTI_val','ifPrisma',
 dat_wide = dat2%>%pivot_wider(names_from=feature_names,values_from='DTI_val')
 ```
 
-
 ## Apply longitudinal combat and investigate scanner effects
 
 Construct a b-spline for corrected age. Then longitudinal combat will use this spline for corrected age. We used df=5 to capture a relatively simple curve, since the effective degrees of freedom from initial GAMMs indicated effective degrees of freedom of 3-4 in the penalized spline approach. Based on inspection, the results appear relatively robust to this choice, although the spline may help to reduce some scanner effects. 
@@ -84,5 +84,23 @@ dat_combat <- longCombat(idvar='Unique_ID',
                              data=dat_wide)
 dat_harmonized <- merge(dat_wide, dat_combat$data_combat, by=c('Unique_ID', 'Corr_age','Scanner'))
 
-write.csv(dat_harmonized,file='~/Dropbox/WhiteMatterDevelopment/dat_harmonized.csv',row.names=FALSE)
+```
+
+## Added 14 January 2024:
+
+There are issues with Corr_age for one infant. Replace with correct corrected age.
+
+```{r}
+# evidence that correction is needed:
+dat_short = dat_harmonized[,c('Unique_ID','chor_age','Corr_age','GA')]
+dat_short$my_correctedage = dat_harmonized$chor_age-(40-dat_harmonized$GA)*7
+dat_short$diff = dat_short$Corr_age - dat_short$my_correctedage
+
+dat_short[which(dat_short$diff!=0),]
+# note: GA=37.3 for one infant is correct
+
+# overwrite the old Corr_age with correct Corr_age:
+dat_harmonized$Corr_age = dat_harmonized$chor_age-(40-dat_harmonized$GA)*7
+
+write.csv(dat_harmonized,file='dat_harmonized.csv',row.names=FALSE)
 ```

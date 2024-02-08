@@ -1,0 +1,37 @@
+---
+title: "Investigating Interactions"
+author: "Benjamin Risk"
+date: "5/7/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Additional investigation into interaction effects with smooths
+
+```{r}
+dat_harmonized = read.csv('~/Dropbox/WhiteMatterDevelopment/dat_harmonized.csv',stringsAsFactors = TRUE)
+```
+### Conduct F-test
+```{r}
+model.sex.fa.full = gam(WB_fa.combat~s(Corr_age,by=Sex)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+summary(model.sex.fa.full)
+
+model.sex.fa.reduced = gam(WB_fa.combat~s(Corr_age)+Sex+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+anova(model.sex.fa.reduced,model.sex.fa.full,test = 'F')
+# Woods book uses approximate likelihood ratio test with Chisq
+```
+
+### Re-parameterize and directly define interaction spline
+
+This parameterization finds a significant effect of age. Something appears to be wrong. 
+```{r}
+dat_harmonized$Corr_ageSex = dat_harmonized$Corr_age*(dat_harmonized$Sex=='F')
+model.sex.fa.alt = gam(WB_fa.combat~s(Corr_age)+Sex+s(Corr_ageSex)+s(Unique_ID,bs='re'),method='REML',data=dat_harmonized)
+summary(model.sex.fa.alt)
+anova(model.sex.fa.alt)
+plot(model.sex.fa.alt,page=1)
+```

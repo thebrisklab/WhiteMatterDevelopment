@@ -1,0 +1,82 @@
+---
+title: 'White Matter Develoment: Analysis'
+author: "Benjamin Risk"
+date: "4/27/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Examine scanner effects
+We examine whether combat reduced batch effects. This code also allows a comparison of the curves in the trio and prisma scanners.
+
+```{r}
+library(mgcv)
+library(itsadug)
+
+examine_combat_corrage = function(feature,feature.combat,dataset,legendlocation='bottomright',ylab,xlab) {
+ 
+#  model0 = gam(feature~Scanner+s(Corr_age,by=Scanner,bs='bs')+Sex+s(Unique_ID,bs='re'),method='REML',data=dataset)
+
+#  model0.harm = gam(feature.combat~Scanner+s(Corr_age,by=Scanner,bs='bs')+Sex+s(Unique_ID,bs='re')+Scanner,method='REML',data=dataset)
+# Edited 12 June 2022
+    model0 = gam(feature~Scanner+s(Corr_age,by=Scanner)+Sex+s(Unique_ID,bs='re'),method='REML',data=dataset)
+
+  model0.harm = gam(feature.combat~Scanner+s(Corr_age,by=Scanner)+Sex+s(Unique_ID,bs='re')+Scanner,method='REML',data=dataset)
+
+   
+   par(mfrow=c(2,3))
+  b=plot_smooth(model0,view="Corr_age",cond=list(Scanner='trio'),col='red',print.summary=FALSE,sim.ci=TRUE,hide.label=TRUE,ylab=paste0(ylab,', no harmonize'),xlab=xlab)
+  
+  plot_smooth(model0, view="Corr_age", cond=list(Scanner='prisma'), add=TRUE, col='blue',print.summary=FALSE,sim.ci=TRUE,hide.label=TRUE,ylab=paste0(ylab,', no harmonize'),xlab=xlab)
+    legend(x=legendlocation,legend=c('trio','prisma'),lty=1,lwd=2,col=c('red','blue'),bty='n',cex=1)
+  plot_diff(model0,view='Corr_age',comp=list(Scanner=c('trio','prisma')),print.summary=FALSE,sim.ci=TRUE,hide.label=TRUE,ylab=paste0(ylab,', no harmonize'),xlab=xlab)
+  boxplot(resid(model0)~dataset$Scanner,ylab='residual, no harmonize',xlab='Scanner')
+  
+
+  plot_smooth(model0.harm,view="Corr_age",cond=list(Scanner='trio'),col='red',print.summary=FALSE,sim.ci=TRUE,hide.label=TRUE,ylab=paste0(ylab,', harmonized'),xlab=xlab)
+  plot_smooth(model0.harm, view="Corr_age", cond=list(Scanner='prisma'), add=TRUE, col='blue',print.summary=FALSE,sim.ci=TRUE,hide.label=TRUE,ylab=paste0(ylab,', harmonized'),xlab=xlab)
+    legend(x=legendlocation,legend=c('trio','prisma'),lty=1,lwd=2,col=c('red','blue'),bty='n',cex=1)
+  plot_diff(model0.harm,view='Corr_age',comp=list(Scanner=c('trio','prisma')),print.summary=FALSE,sim.ci=TRUE,hide.label=TRUE,ylab=paste0(ylab,', harmonized'),xlab=xlab)
+  boxplot(resid(model0.harm)~dataset$Scanner,ylab='residual, harmonized',xlab='Scanner')
+}
+```
+
+Examine the whole brain curves:
+```{r}
+dat_harmonized = read.csv('dat_harmonized.csv',stringsAsFactors = TRUE)
+
+tiff(file='../Figures/WholeBrainFA_Combat.tiff',width=720,height=480,pointsize=20)
+examine_combat_corrage(dat_harmonized$WB_fa,dat_harmonized$WB_fa.combat,dat_harmonized,xlab='Corrected age (days)',ylab='fa')
+dev.off()
+
+tiff(file='../Figures/WholeBrainMD_Combat.tiff',width=720,height=480,pointsize=20)
+examine_combat_corrage(dat_harmonized$WB_md,dat_harmonized$WB_md.combat,dat_harmonized,xlab='Corrected age (days)',ylab='md',legendlocation='topright')
+dev.off()
+
+tiff(file='../Figures/WholeBrainAD_Combat.tiff',width=720,height=480,pointsize=20)
+examine_combat_corrage(dat_harmonized$WB_ad,dat_harmonized$WB_ad.combat,dat_harmonized,xlab='Corrected age (days)',ylab='ad',legendlocation='topright')
+dev.off()
+
+tiff(file='../Figures/WholeBrainRD_Combat.tiff',width=720,height=480,pointsize=20)
+examine_combat_corrage(dat_harmonized$WB_rd,dat_harmonized$WB_rd.combat,dat_harmonized,xlab='Corrected age (days)',ylab='rd',legendlocation='topright')
+dev.off()
+
+```
+Combat is helping to remove the shift in the mean. I don't see a large change in the variances, though, as indicated by the IQR, but looks okay for further analysis.
+
+
+Examine a few of the trajectories in different ROIs. These results are not in the current version of the manuscript:
+```{r,eval=FALSE}
+examine_combat(dat_harmonized$AF_fa,dat_harmonized$AF_fa.combat,dat_harmonized,xlab='Corrected Age (days)',ylab='fa')
+
+examine_combat(dat_harmonized$CCg_fa,dat_harmonized$CCg_fa.combat,dat_harmonized,xlab='Corrected Age (days)',ylab='fa')
+
+examine_combat(dat_harmonized$CCg_md,dat_harmonized$CCg_md.combat,dat_harmonized,xlab='Corrected Age (days)',ylab='fa')
+
+examine_combat(dat_harmonized$PT_rd,dat_harmonized$PT_rd.combat,dat_harmonized,xlab='Corrected Age (days)',ylab='fa')
+
+```
