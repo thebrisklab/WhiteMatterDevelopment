@@ -1,2 +1,2 @@
 # WhiteMatterDevelopment
-Shultz and Li DTI infants
+DTI developmental trajectories in infants
