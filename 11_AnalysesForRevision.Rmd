@@ -1,0 +1,123 @@
+---
+title: "AnalysesForRevision"
+author: "Ben Risk"
+date: "2025-07-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+dat_harmonized = read.csv('dat_harmonized_lr.csv',stringsAsFactors = TRUE)
+dat_harmonized$Family_ID=factor(dat_harmonized$Family_ID)
+
+```
+
+
+## Create a plot of Gestational Age and Chronological Age
+
+```{r}
+tiff('../Figures/GAvsChronologicalAge_Data_FirstSubmission.tiff',width=1280,height=640)
+ggplot(dat_harmonized, aes(
+    x = chor_age,
+    y = GA,
+    color = Scanner,
+    shape = Sex   # add shape mapping
+  )) +
+  geom_point(size = 4, alpha = 0.8) +
+  labs(
+    x = "Chronological age (days)",
+    y = "Gestational age at birth (weeks)",
+    title = 'Data analyzed in first submission',
+    color = "Scanner",
+    shape = "Sex"
+  ) +
+  theme_minimal(base_size = 24) +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  ) +
+  scale_color_brewer(palette = "Paired") +
+  xlim(0, NA) +
+  scale_shape_manual(values = c(16, 17))  # e.g., 16 = filled circle, 17 = filled triangle
+dev.off()
+
+
+# Restricting analysis to 36 to 41:
+dat_36_41 = dat_harmonized%>%filter(GA>=36 & GA<=41)
+tiff('../Figures/GAvsChronologicalAgeCorrectedAge_Data_36_41.tiff',width=1280,height=640)
+dat_36_41%>%ggplot(aes(x = chor_age, y = GA, color = Scanner, shape=Sex)) +
+  geom_point(size = 4, alpha = 0.8) +
+  labs(
+    x = "Chronological age (days)",
+    y = "Gestational age at birth (weeks)",
+    title='GA and chronological age of infant scans',
+    color = "Scanner",
+    shape = "Sex") +
+  theme_minimal(base_size = 24) +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(hjust = 0.5, face = "bold")
+  ) +
+  scale_color_brewer(palette = "Paired") +
+  xlim(0,NA)+
+  scale_shape_manual(values = c(16, 17))  # e.g., 16 = filled circle, 17 = filled triangle
+dev.off()
+
+```
+
+
+
+
+## Plot mean relative motion against Corr_age:
+
+```{r}
+library(mgcv)
+
+#model.motion = gam(Mean_RMS~Sex+s(chor_age)+s(Unique_ID,bs='re')+s(Family_ID,bs='re'),data=dat_harmonized)
+#summary(model.motion)
+
+model.motion = gam(Mean_RMS~Sex+s(chor_age)+s(Unique_ID,bs='re')+s(Family_ID,bs='re'),data=dat_36_41)
+summary(model.motion)
+
+# check Absolute:
+model.absolute = gam(Absolute_RMS~Sex+s(chor_age)+s(Unique_ID,bs='re')+s(Family_ID,bs='re'),data=dat_36_41)
+summary(model.absolute)
+# Absolute not significant. 
+
+
+# Create a new data frame for predictions (averaging over random effects)
+newdata <- data.frame(
+  chor_age = seq(min(dat_36_41$chor_age, na.rm = TRUE),
+                 max(dat_36_41$chor_age, na.rm = TRUE),
+                 length.out = 200),
+  Sex=factor('M',levels=levels(dat_36_41$Sex)),
+  Unique_ID =dat_36_41$Unique_ID[1],
+  Family_ID = dat_36_41$Family_ID[1]
+)
+
+# Predict fixed effect smooth of chor_age only
+newdata$predicted <- predict(model.motion, newdata = newdata, exclude = c("s(Unique_ID)", "s(Family_ID)"))
+
+# Plot data + fitted smooth
+tiff('../Figures/RelativeMotion_ChronologicalAge_36_41.tiff',width=1280,height=640)
+ggplot(dat_36_41, aes(x = chor_age, y = Mean_RMS)) +
+  geom_point(alpha = 0.6, size = 4) +
+  geom_line(data = newdata, aes(x = chor_age, y = predicted), color = "blue", linewidth = 1.2) +
+  labs(
+    x = "Chronological Age",
+    y = "Relative Motion",
+    title = "Relative motion vs. Chronological Age with GAM Fit"
+  ) +
+  theme_minimal(base_size = 20) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+dev.off()
+
+```
+
+Conclusion: add Mean RMS to the models
+
