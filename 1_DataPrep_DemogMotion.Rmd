@@ -1,0 +1,98 @@
+---
+title: "White Matter Development Data Preparation and Harmonization"
+author: "Benjamin Risk"
+# date: "2/14/2022"
+date: 07/31/2025
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Updates:
+-Added Family ID
+
+-Added Actual_ID which is used in merge to motion data
+
+-Added mean absolute and relative motion
+
+-Reduced to demographic and motion variables
+
+## Data prep
+
+Grab the IDs, DOB, GA, chor_age, Corr_age, and Sex
+
+```{r,results=FALSE}
+library(dplyr)
+dat = read.delim('../Data/dti_data_extracted_by_tracts_all_atlas_symmetry_xyflipped_2_TnP2020.txt',sep=" ",stringsAsFactors = TRUE)
+dat$Scanner = as.factor(ifelse(dat$ifPrisma==0,'trio','prisma'))
+
+```
+
+
+
+There are issues with Corr_age for one infant. Replace with correct corrected age.
+
+```{r}
+# evidence that correction is needed:
+dat_short = dat[,c('Unique_ID','chor_age','Corr_age','GA')]
+dat_short$my_correctedage = dat$chor_age-(40-dat$GA)*7
+dat_short$diff = dat_short$Corr_age - dat_short$my_correctedage
+
+dat_short[which(abs(dat_short$diff)>1),]
+# note: GA=37.3 for one infant is correct
+
+# overwrite the old Corr_age with correct Corr_age:
+dat$Corr_age = dat$chor_age-(40-dat$GA)*7
+```
+
+Subset to columns used in downstream analyses:
+
+```{r}
+dat = dat[,c('Actual_ID','DOB','GA','chor_age','Corr_age','Sex','Unique_ID','ifPrisma','Scanner')]
+```
+
+## Added 7/30/2025:
+
+Create family ID variable:
+
+```{r}
+# how many pairs of twins due we have:
+dat$Family_ID = factor(substr(dat$Unique_ID,1,5))
+
+dat = dat[!duplicated(dat),]
+family_counts <- dat %>%
+  distinct(Unique_ID, .keep_all = TRUE) %>%       # Keep one row per Unique_ID
+  count(Family_ID, name = "n_in_family")       # Count number of Unique_IDs per FamilyID
+
+dat <- dat %>%
+  left_join(family_counts, by = "Family_ID")%>%
+  mutate(Sibling = as.integer(n_in_family > 1))
+
+ 
+table(dat$n_in_family)
+# we have 30 scans from siblings (with some twins)
+```
+
+## Added 7/31/25:
+
+Calculate Mean Absolute and Relative Motion:
+
+```{r}
+motion_data = dat[,c('Actual_ID','Unique_ID')]
+motion_data$Absolute_RMS=motion_data$Mean_RMS=NA
+
+for (i in 1:nrow(motion_data)) {
+  rms=read.table(paste0('/home/ben/Dropbox/WhiteMatterDevelopment/EddyMotionParameters/',motion_data$Actual_ID[i],'/eddy_corrected_dataup.eddy_movement_rms'))
+  motion_data[i,'Absolute_RMS'] = mean(rms[2:nrow(rms),1])
+  motion_data[i,'Mean_RMS'] = mean(rms[2:nrow(rms),2])
+}
+motion_data = motion_data%>%select(-Unique_ID)
+dat=merge(dat,motion_data)
+```
+
+Write file to disk:
+```{r}
+write.csv(dat,file='dat_demog.csv',row.names=FALSE)
+```
