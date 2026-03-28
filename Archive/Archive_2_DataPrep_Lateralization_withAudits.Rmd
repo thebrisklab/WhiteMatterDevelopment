@@ -1,0 +1,217 @@
+---
+title: "White Matter Development Data Preparation and Harmonization"
+author: "Benjamin Risk"
+# date: "2/14/2022"
+date: 12/16/2025
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data prep
+
+
+
+```{r,results=FALSE}
+library(RNifti)
+library(readxl)
+library(dplyr)
+library(stringr)
+
+a = proc.time()
+atlas = readNifti('~/Dropbox/WhiteMatterDevelopment/nifti/diffeo_warped/Register_Tracts_from_Template_to_Current_Space/Template_and_Tracts_Original_Asymmetry/tracts_all_atlas_asymmetry_xyflipped_2_TnP2020.nii.gz')
+image(atlas[,,69])
+```
+
+Update this atlas with the updated arcuate fasciculus that corrects the R-L issues
+```{r}
+```
+
+overwrite tracts_all_atlas_asymmetry_xyflipped_2_TnP2020.nii.gz with new AF:
+
+```{r}
+af_liberal=TRUE
+
+if(af_liberal) {
+  af = readNifti('~/Dropbox/WhiteMatterDevelopment/nifti/diffeo_warped/AF_liberal/AF_L_R_liberal_flipped_Warp.nii.gz')
+  
+  # Based on visual inspection of AF_L_R_liberal_flipped_Warp.nii.gz, "1" corresponds to AF right, and "2" to AF left. Correct the labels to correspond to tracts_all_atlas_asymmetry_xyflipped_2_TnP2020.nii.gz:
+  
+  table(af)
+  af[af==2]=9
+  af[af==1]=2
+  af[af==9]=1
+  atlas_old=atlas
+  atlas[atlas_old==1 | atlas_old==2] = 0
+  atlas[af==1] = af[af==1]
+  atlas[af==2] = af[af==2]
+}
+table(atlas)
+
+```
+
+read in example participant:
+```{r}
+sub_fa = readNifti('~/Dropbox/WhiteMatterDevelopment/nifti/diffeo_warped/harmonized_dti_data/00008-03-02_CSI20151218_tensorup_s_m_aff_diffeo_masked_fa.nii.gz')
+```
+ben's notes: I checked, and the files  00008-03-02_CSI20151218_tensorup_s_m_aff_diffeo_masked_fa.nii represents the not harmonized data. 
+
+read in labels and "symmetric" data used in main analysis for auditing:
+```{r}
+labels = read_xlsx("~/Dropbox/WhiteMatterDevelopment/nifti/diffeo_warped/Table_Included_tracts reorderedCol.xlsx")
+labels = labels%>%rename(ROI_number = `Intensity Index (Asymmetry)`,ROI_name=`Abbreviations`)
+# sort by ROI_number:
+labels = labels[order(labels$ROI_number),]
+
+dat_harmonized = read.csv('dat_harmonized_old.csv')
+actual_ids = dat_harmonized[!duplicated(dat_harmonized$Actual_ID),c('Actual_ID')]
+metrics = c('fa','tr','ad','rd')
+var_names = labels$ROI_name
+roi_labels = labels$ROI_number
+```
+
+Compute asymmetric data:
+  
+```{r}  
+# A function that returns the file path for a given subject ID and metric.
+file_template <- "~/Dropbox/WhiteMatterDevelopment/nifti/diffeo_warped/harmonized_dti_data/%s_tensorup_s_m_aff_diffeo_masked_%s.nii.gz"                                
+# Example expected paths like "/data/dti/ACT123/fa.nii.gz"
+file_for <- function(id, metric) sprintf(file_template, id, metric)
+# making nice progress here, working through chat gpt code
+
+stopifnot(length(var_names) == length(roi_labels))
+stopifnot(is.array(atlas))
+
+# Precompute voxel indices for each ROI (fast later)
+roi_index_list <- lapply(roi_labels, function(lbl) which(atlas == lbl))
+names(roi_index_list) <- var_names
+
+
+# Helper safe mean
+.safe_mean <- function(x) if (length(x)) mean(x, na.rm = TRUE) else NA_real_
+# ben note: see if we can add a tolerance here
+
+
+# ---- Prepare output frame: Actual_ID + 19*4 = 76 metric columns ----
+all_metric_cols <- as.vector(outer(var_names, metrics, function(n, m) paste0(n, "_", m)))
+out <- data.frame(Actual_ID = actual_ids, matrix(NA_real_, nrow = length(actual_ids), ncol = length(all_metric_cols)))
+colnames(out)[-1] <- all_metric_cols
+
+# ---- Core loop: actual_ids × metrics ----
+for (i in seq_along(actual_ids)) {
+  id <- actual_ids[i]
+
+  # Optional: message progress
+  if (i %% 10 == 0) message("Scan ", i, "/", length(actual_ids), ": ", id)
+
+  for (met in metrics) {
+    img_path <- file_for(id, met)
+    if (!file.exists(img_path)) {
+      warning("Missing file: ", img_path, " (leaving NAs for this subject/metric)")
+      next
+    }
+
+    img <- readNifti(img_path)
+
+    # Dimension check (basic guard)
+    if (!all(dim(img) == dim(atlas))) {
+      stop("Dimension mismatch for subject ", id, ", metric ", met,
+           ": img dims ", paste(dim(img), collapse = "x"),
+           " vs atlas dims ", paste(dim(atlas), collapse = "x"))
+    }
+
+    # Compute means per ROI using precomputed indices
+    roi_means <- vapply(roi_index_list, function(idx) .safe_mean(img[idx]), numeric(1))
+    # to remove 0s: .safe_mean(img[idx][img[idx] != 0])
+    
+    # Place into correct columns
+    cols_this_metric <- paste0(names(roi_means), "_", met)
+    out[i, cols_this_metric] <- roi_means
+    }
+}
+
+out <- out %>%
+  rename_with(.fn = ~ sub("_tr$", "_md", .x), .cols = ends_with("_tr")) %>%
+  mutate(across(ends_with("_md"), ~ .x / 3))
+
+# excellent, i checked corpus collosum values for the first three scans and they match dat_harmonized!
+proc.time()-a
+```
+
+
+## Calculate the symmetric (non-lateralized) version for AF, ATR, Ci, Fx, IFOF, ILF, PT, and UF:
+
+```{r}
+# ---- voxel counts for each ROI (fixed across subjects) ----
+roi_nvox <- vapply(roi_index_list, length, integer(1))  # names match var_names
+metrics=c('fa','md','ad','rd')
+
+# ---- identify tracts with L/R versions based on var_names ----
+bases_L <- str_match(var_names, "^(.*)_L$")[,2]
+bases_R <- str_match(var_names, "^(.*)_R$")[,2]
+lr_bases <- intersect(na.omit(bases_L), na.omit(bases_R))
+
+# Safety: show what will be combined
+message("Combining L/R for: ", paste(lr_bases, collapse = ", "))
+
+# ---- add weighted-mean combined columns for each metric ----
+for (b in lr_bases) {
+  nL <- roi_nvox[paste0(b, "_L")]
+  nR <- roi_nvox[paste0(b, "_R")]
+  denom <- nL + nR
+
+  for (met in metrics) {
+    colL <- paste0(b, "_L_", met)
+    colR <- paste0(b, "_R_", met)
+    colC <- paste0(b, "_",   met)
+    out[[colC]] <- (out[[colL]] * nL + out[[colR]] * nR) / denom
+  }
+}
+```
+
+Calculate whole brain DTI:
+```{r}
+# ---- Whole-brain weighted means (STRICT: any NA => NA) ----
+
+for (met in metrics) {
+  roi_cols <- paste0(var_names, "_", met)   # e.g., AF_L_fa, ..., UF_R_fa
+  w <- roi_nvox[var_names]                  # voxel counts aligned to var_names
+  W <- sum(w)
+
+  X <- as.matrix(out[, roi_cols, drop = FALSE])
+
+  # If any ROI is NA in a row, WB is NA for that subject
+  out[[paste0("WB_", met)]] <-
+    as.numeric(X %*% w) / W
+
+  
+  stopifnot(all(colnames(out)[match(paste0(var_names, "_", metrics[1]),
+                                  colnames(out))] %in% colnames(out)))
+  stopifnot(length(w) == ncol(X))
+}
+```
+
+Audit: check how new whole brain measures compare to old, and check for a couple ROIs:
+
+```{r}
+plot(dat_harmonized$WB_fa~out$WB_fa)
+summary(lm(dat_harmonized$WB_fa~out$WB_fa))
+
+plot(dat_harmonized$WB_md~out$WB_md)
+plot(dat_harmonized$WB_ad~out$WB_ad)
+plot(dat_harmonized$WB_rd~out$WB_rd)
+
+plot(dat_harmonized$IFOF_fa~out$IFOF_fa)
+
+plot(dat_harmonized$UF_ad~out$UF_ad)
+
+plot(dat_harmonized$CCb_md~out$CCb_md)
+```
+Processing reproduces Longchuan's calculations for ROIs that should match. WB very similar but slightly different due to modified AF.
+
+We pass the audit. Active (not archive) version of this code does not contain merge to old dat_harmonized_old
+
+
+

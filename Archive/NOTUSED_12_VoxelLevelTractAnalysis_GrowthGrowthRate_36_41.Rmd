@@ -1,0 +1,283 @@
+---
+title: "Analyze voxel level growth"
+author: "Ben Risk"
+date: "2025-08-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Reviewer comment
+
+Currently, the analysis averages metrics across entire tracts. A more nuanced and informative analysis would involve examining spatially specific changes along the length of each tract, which could reveal regionally distinct developmental patterns.
+
+```{r}
+library(RNifti)
+library(dplyr)
+library(longCombat)
+atlas = readNifti('~/Dropbox/WhiteMatterDevelopment/nifti/diffeo_warped/Register_Tracts_from_Template_to_Current_Space/Template_and_Tracts_Original_Asymmetry/tracts_all_atlas_asymmetry_xyflipped_2_TnP2020.nii.gz')
+
+# code borrowed from 2_DataPrep_Lateralization.Rmd:
+af_liberal=TRUE
+
+if(af_liberal) {
+  af = readNifti('~/Dropbox/WhiteMatterDevelopment/nifti/diffeo_warped/AF_liberal/AF_L_R_liberal_flipped_Warp.nii.gz')
+  
+  # Based on visual inspection of AF_L_R_liberal_flipped_Warp.nii.gz, "1" corresponds to AF right, and "2" to AF left. Correct the labels to correspond to tracts_all_atlas_asymmetry_xyflipped_2_TnP2020.nii.gz:
+  
+  table(af)
+  af[af==2]=9
+  af[af==1]=2
+  af[af==9]=1
+  atlas_old=atlas
+  atlas[atlas_old==1 | atlas_old==2] = 0
+  atlas[af==1] = af[af==1]
+  atlas[af==2] = af[af==2]
+}
+table(atlas)
+wm_mask=atlas
+
+# make 0 in mask equal to NA:
+wm_mask_na=wm_mask
+wm_mask_na[wm_mask==0]=NA
+wm_mask_na[!is.na(wm_mask_na)]=1
+# get a template file with desired header info:
+na_template = wm_mask
+na_template[!is.na(wm_mask)]=NA
+
+sum(wm_mask_na,na.rm=TRUE)
+stop('Too many voxels')
+```
+STOPPED HERE -- TOO MANY VOXELS, WOULD TAKE LIKE 
+
+```{r}
+# get subject list:
+dat = read.csv('dat_harmonized_lr.csv',stringsAsFactors = TRUE)
+# restrict to GA 36 to 41:
+dat = dat%>%filter(GA>=36 & GA<=41)
+
+id_list = as.character(dat$Actual_ID)
+
+# choose 1 axial slice:
+axial_index = 90
+
+# DTI measure:
+measure.list = c('fa','tr','ad','rd')
+measure=measure.list[1]
+
+# create a matrix where each row represents a subject and each column represents a voxel:
+nvoxel = sum(wm_mask[,,axial_index]==1)
+dat_mat = matrix(NA,nrow=length(id_list),ncol=nvoxel)
+```
+
+
+# Loop through the 4 measures:
+
+```{r}
+for (measure in measure.list) {
+
+  for (i in 1:length(id_list)) {  
+    subj = readNifti(paste0('/home/ben/Dropbox/WhiteMatterDevelopment/nifti/diffeo_warped/harmonized_dti_data/',id_list[i],'_tensorup_s_m_aff_diffeo_masked_',measure,'.nii.gz'))
+    temp = subj[,,axial_index]
+    dat_mat[i,] = temp[wm_mask[,,axial_index]==1]  
+  }
+
+  # Inspect data
+  sum(dat_mat==0)
+  # fa looks good, only six entries out of 400,000 equal to 0. don't worry about them.
+  
+  # convert trace to MD:
+  if(measure=='tr') dat_mat = dat_mat/3
+  
+  # Merge voxel data with demographic data:
+  dat_wide = data.frame('Actual_ID'=id_list,dat_mat)
+  dat_wide$Actual_ID=factor(dat_wide$Actual_ID)
+  dat_wide = merge(dat,dat_wide)
+  
+  # reshape wide to get input features for longitudinal combat
+  feature_names=names(dat_wide)[244:length(dat_wide)]
+  stopifnot(feature_names[1]=='X1')
+  #detach('package:tidyr',unload=TRUE)
+  degreesfreedom=5
+  temp = splines::bs(dat_wide$Corr_age,df=degreesfreedom)
+  temp = data.frame(temp)
+  names(temp) = paste0("Corr_age",1:degreesfreedom)
+  dat_wide = cbind(dat_wide,temp)
+  
+  # check the spline fit:
+  # model.test = lm(dat_wide$AF_fa~as.matrix(temp))
+  # plot(predict(model.test)~dat_wide$Corr_age)
+
+  a = proc.time()     
+  dat_combat <- longCombat(idvar='Unique_ID', 
+                             timevar='Corr_age',
+                             batchvar='Scanner', 
+                             features=feature_names,
+                             formula='Corr_age1 + Corr_age2+ Corr_age3 + Corr_age4 + Corr_age5+Sex', 
+                            #formula='Corr_age + Sex', # note: linear vs spline seem similar
+                             ranef='(1|Unique_ID)',
+                             verbose=FALSE,
+                             data=dat_wide)
+  dat_harmonized <- merge(dat_wide, dat_combat$data_combat, by=c('Unique_ID', 'Corr_age','Scanner'))
+  dat_harmonized$Family_ID=factor(dat_harmonized$Family_ID)
+  save(dat_harmonized,file = paste0('../IntermediateData/',measure,'_wmtractvoxel_harmonized.RData'))
+}
+
+```
+
+```{r}
+# Quick check things are okay:
+p.mat.notharmonized=rep(NA,nvoxel)
+p.mat.harmonized=rep(NA,nvoxel)
+for (i in 1:nvoxel) {
+  model.temp=summary(lm(dat_harmonized[,243+i]~dat_harmonized$Scanner))
+  p.mat.notharmonized[i] = model.temp$coefficients[2,4]
+  model.temp=summary(lm(dat_harmonized[,3476+i]~dat_harmonized$Scanner))
+  p.mat.harmonized[i] = model.temp$coefficients[2,4]
+}
+
+sum(p.mat.notharmonized<0.05/nvoxel)
+sum(p.mat.harmonized<0.05/nvoxel)
+```
+No p-values survive FWER correction in harmonized data, which is good.
+
+# Fit GAMM and predict at 30, 90, and 180 and their derivatives:
+
+```{r}
+library(mgcv)
+library(parallel)
+
+corr_vals <- c(30, 90, 180)
+h <- 1  # finite-difference step for Corr_age
+
+newdata <- data.frame(
+  Mean_RMS  = mean(dat_harmonized$Mean_RMS, na.rm = TRUE),
+  Corr_age  = corr_vals,
+  Unique_ID = factor(levels(dat_harmonized$Unique_ID)[1],
+                     levels = levels(dat_harmonized$Unique_ID)),
+  Family_ID = factor(levels(dat_harmonized$Family_ID)[1],
+                     levels = levels(dat_harmonized$Family_ID))
+)
+
+idx <- 1:nvoxel
+cores <- max(1, detectCores(logical = TRUE) - 1)
+
+fit_one <- function(i,measure) {
+  load(paste0('../IntermediateData/',measure,'_wmtractvoxel_harmonized.RData'))
+  df <- dat_harmonized
+  df$y <- df[, 3476 + i]
+  model.simple <- gam(
+    y ~ s(Mean_RMS) + s(Corr_age) +
+        s(Unique_ID, bs = "re") + s(Family_ID, bs = "re"),
+    method = "REML",
+    data = df
+  )
+
+  ## Population-level means (exclude RE)
+  pred <- predict(
+    model.simple,
+    newdata = newdata,
+    se.fit  = TRUE,
+    type    = "response",
+    exclude = c("s(Unique_ID)", "s(Family_ID)")
+  )
+
+  ## Derivatives wrt Corr_age at corr_vals (identity link ⇒ response == linear predictor)
+  nd_plus  <- within(newdata, Corr_age <- Corr_age + h)
+  nd_minus <- within(newdata, Corr_age <- Corr_age - h)
+
+  Xp <- predict(model.simple, newdata = nd_plus,
+                type = "lpmatrix", exclude = c("s(Unique_ID)", "s(Family_ID)"))
+  Xm <- predict(model.simple, newdata = nd_minus,
+                type = "lpmatrix", exclude = c("s(Unique_ID)", "s(Family_ID)"))
+  D <- (Xp - Xm) / (2 * h)                 # central difference design
+
+  beta <- coef(model.simple)
+  Vb   <- vcov(model.simple)
+
+  deriv <- as.numeric(D %*% beta)          # dμ/d(Corr_age)
+  se_d  <- sqrt(rowSums((D %*% Vb) * D))   # sqrt(diag(D V D^T))
+
+  list(
+    mean        = as.numeric(pred$fit),
+    lower       = as.numeric(pred$fit - 1.96 * pred$se.fit),
+    upper       = as.numeric(pred$fit + 1.96 * pred$se.fit),
+    deriv       = deriv,
+    deriv_se    = se_d,
+    deriv_lower = deriv - 1.96 * se_d,
+    deriv_upper = deriv + 1.96 * se_d
+  )
+}
+
+a <- proc.time()
+for (measure in measure.list) {
+    out_list <- mclapply(idx, fit_one, mc.cores = cores, measure=measure)
+    timing <- proc.time() - a
+    timing
+    
+    # Bind into matrices [nvoxel x 3]
+    results_mean        <- do.call(rbind, lapply(out_list, `[[`, "mean"))
+    results_lower       <- do.call(rbind, lapply(out_list, `[[`, "lower"))
+    results_upper       <- do.call(rbind, lapply(out_list, `[[`, "upper"))
+    results_deriv       <- do.call(rbind, lapply(out_list, `[[`, "deriv"))
+    results_deriv_se    <- do.call(rbind, lapply(out_list, `[[`, "deriv_se"))
+    results_deriv_lower <- do.call(rbind, lapply(out_list, `[[`, "deriv_lower"))
+    results_deriv_upper <- do.call(rbind, lapply(out_list, `[[`, "deriv_upper"))
+    
+    # Label columns by Corr_age values
+    labs <- paste0("Corr_", corr_vals)
+    
+    for (m in c("results_mean","results_lower","results_upper",
+                "results_deriv","results_deriv_se",
+                "results_deriv_lower","results_deriv_upper")) {
+      tmp <- get(m)              # retrieve the object
+      colnames(tmp) <- labs      # set the column names
+      assign(m, tmp)             # put it back into the environment
+    }
+  save(results_mean,results_lower,results_upper,results_deriv,results_deriv_se,results_deriv_lower,results_deriv_upper,file=paste0('../IntermediateData/',measure,'_results_wmtractvoxel_30_90_180.RData'))
+
+# Build nifti files:
+
+  arr4 <- array(NA_real_, dim = c(dim(na_template), 3))
+
+  # repopulate a slice:
+  for (t in 1:length(corr_vals)) {
+    slice = matrix(NA,256,256)
+    slice[wm_mask[,,90]==1]=results_mean[,t]  
+    arr4[,,90,t]=slice
+  }
+  hdr = niftiHeader(na_template)
+  spax = hdr$pixdim[2:4]
+  TR = 1
+  img4 <- asNifti(arr4, na_template,pixdim = c(NA, spax, TR))
+  
+  writeNifti(img4, file=paste0("~/Dropbox/WhiteMatterDevelopment/nifti/results/",measure,"_results_wmtractvoxel.nii.gz"))
+}  
+proc.time()-a
+```
+
+Make derivatives niftis:
+
+```{r}
+for (measure in measure.list) {
+  load(paste0("../IntermediateData/",measure,"_results_wmtractvoxel_30_90_180.RData"))
+  arr4 <- array(NA_real_, dim = c(dim(na_template), 3))
+
+  # repopulate a slice:
+  for (t in 1:length(corr_vals)) {
+    slice = matrix(NA,256,256)
+    slice[wm_mask[,,90]==1]=results_deriv[,t]  
+    arr4[,,90,t]=slice
+  }
+  hdr = niftiHeader(na_template)
+  spax = hdr$pixdim[2:4]
+  TR = 1
+  img4 <- asNifti(arr4, na_template,pixdim = c(NA, spax, TR))
+  
+  writeNifti(img4, file=paste0("~/Dropbox/WhiteMatterDevelopment/nifti/results/",measure,"_deriv_wmtractvoxel.nii.gz"))
+}
+```
+
+  

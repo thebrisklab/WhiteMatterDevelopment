@@ -1,0 +1,251 @@
+---
+title: 'White Matter Develoment: Analysis Mahalanobis'
+author: "Benjamin Risk"
+date: "4/27/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Make data in long format for use with Longchuan's code 
+```{r}
+library(mgcv)
+library(itsadug)
+mac = read.csv('dat_harmonized.csv',stringsAsFactors = TRUE)
+hcp=read.table("dti_data_extracted_by_tracts_all_atlas_symmetry_xyflipped_2_fa_mean_adults.txt", header=TRUE)
+col_tab=read.table(file="table_included_tracts_reorderedCol_sym_hex.txt", header=FALSE, colClasses="character")
+
+# replace trace with MD:
+hcp$DTI_type = as.character(hcp$DTI_type)
+hcp$DTI_val[hcp$DTI_type=='tr'] = hcp$DTI_val[hcp$DTI_type=='tr']/3
+hcp$DTI_type[hcp$DTI_type=='tr'] = 'md'
+
+uniDTI=c('fa','md','ad','rd')
+uniReg=c("UF","AF","ILF","IFOF","Ci","Fx","CCg","CCb","CCs","PT","ATR")
+
+library(tidyr)
+library(dplyr)
+colnamesFA = paste0(uniReg,'_fa','.combat')
+mac_long_fa = mac%>%select(Unique_ID,Corr_age,colnamesFA)%>%pivot_longer(cols=colnamesFA,names_to='ROI_DTI_type',values_to='DTI_val')
+mac_long_fa$DTI_type='fa'
+
+colnamesMD = paste0(uniReg,'_md','.combat')
+mac_long_md = mac%>%select(Unique_ID,Corr_age,colnamesMD)%>%pivot_longer(cols=colnamesMD,names_to='ROI_DTI_type',values_to='DTI_val')
+mac_long_md$DTI_type='md'
+
+colnamesRD = paste0(uniReg,'_rd','.combat')
+mac_long_rd = mac%>%select(Unique_ID,Corr_age,colnamesRD)%>%pivot_longer(cols=colnamesRD,names_to='ROI_DTI_type',values_to='DTI_val')
+mac_long_rd$DTI_type='rd'
+
+colnamesAD = paste0(uniReg,'_ad','.combat')
+mac_long_ad = mac%>%select(Unique_ID,Corr_age,colnamesAD)%>%pivot_longer(cols=colnamesAD,names_to='ROI_DTI_type',values_to='DTI_val')
+mac_long_ad$DTI_type='ad'
+
+mac_long=rbind(mac_long_fa,mac_long_md,mac_long_rd,mac_long_ad)
+mac_long$ROI = sub("_.*", "", mac_long$ROI_DTI_type) 
+
+rm(mac)
+mac=mac_long
+rm(mac_long)
+```
+
+
+
+# Calculate Mahalanobis distance using Longchuan's code:
+
+mahalanobis distance type: 1: FA+RD; 2: FA+RD+AD; 3: RD+AD; 
+Ben added 4: FA+MD+RD+AD
+
+```{r}
+temp=mac[mac$DTI_type==uniDTI[1] & mac$ROI==uniReg[1],];
+mac_mtx=array(NaN,c(length(uniDTI), length(uniReg), length(temp$DTI_val)))
+
+temp=hcp[hcp$DTI_type==uniDTI[1] & hcp$ROI==uniReg[1],];
+hcp_mtx=array(NaN,c(length(uniDTI), length(uniReg), length(temp$DTI_val)))
+
+for (i in 1:length(uniDTI))
+{
+	for (j in 1:length(uniReg)) 
+	{
+		print(paste0(uniDTI[i],' : ',uniReg[j]));
+		rm(macT, hcpT)
+		macT=mac[mac$DTI_type==uniDTI[i] & mac$ROI==uniReg[j],];
+		hcpT=hcp[hcp$DTI_type==uniDTI[i] & hcp$ROI==uniReg[j],]
+		mac_mtx[i,j,]=c(macT$DTI_val)
+		hcp_mtx[i,j,]=c(hcpT$DTI_val)
+	}
+}
+
+print("calculating Mahalanobis distance ...")
+# mahalanobis distance type: 1: FA+RD; 2: FA+RD+AD; 3: RD+AD
+mac_dim=dim(mac_mtx)
+df_comb=data.frame()
+for (mah_type in 1:4) {
+#	rm(df_all)
+	df_all=data.frame()
+	for (j in 1:length(uniReg))	{
+	#	rm(x,center,mah_dist, x, y)
+		mah_dist=array(NaN,c(4, mac_dim[2], mac_dim[3]))
+		if ( mah_type == 1) {
+			#FA+RD
+			x=cbind(mac_mtx[1,j,],mac_mtx[4,j,])
+			y=cbind(hcp_mtx[1,j,], hcp_mtx[4,j,])
+		} else if ( mah_type ==2) {
+			# FA+RD+AD
+			x=cbind(mac_mtx[1,j,],mac_mtx[3,j,], mac_mtx[4,j,])
+			y=cbind(hcp_mtx[1,j,], hcp_mtx[3,j,], hcp_mtx[4,j,])
+			
+		} else if (mah_type == 3)	{
+			# RD+AD
+			x=cbind(mac_mtx[3,j,], mac_mtx[4,j,])
+			y=cbind(hcp_mtx[3,j,], hcp_mtx[4,j,])
+		}
+		# ben tried to add 22 January 2024
+   #else if (mah_type == 4) {
+		# FA + MD + AD + RD
+	  x = t(mac_mtx[,j,])
+	  y = t(hcp_mtx[,j,])
+    }
+		center=colMeans(y)
+		# BR Added 22 June 22: To get mah distance, take square root:
+		mah_dist[mah_type,j,]=sqrt(mahalanobis(x, center, var(y)))
+		# this can't be done because MD=((2*RD)+AD))/3
+		macT=mac[mac$DTI_type==uniDTI[1] & mac$ROI==uniReg[j],]
+		temp_df <- data.frame(Unique_ID=macT$Unique_ID, mah_type=rep(mah_type, each=mac_dim[3]), Corr_age=macT$Corr_age, mah_dis=mah_dist[mah_type, j,], color_tab=rep(paste0("#",col_tab[j,8]), each=mac_dim[3]), Region=as.factor(rep(uniReg[j], each=mac_dim[3])))
+		df_all <- rbind(df_all,temp_df)
+	}
+	df_comb=rbind(df_comb, df_all)
+}
+
+```
+
+# Tract-wise Mahalanobis curves and rates
+
+## Mahalanobis distance curves
+
+### Fit gam and create plot with no CI
+```{r}
+regionsTemp = c('Fx','Ci','CCg','CCb','CCs','ILF','IFOF','AF','UF','ATR','PT')
+regionsColor=c('green4','chartreuse3','purple3','maroon3','magenta2','red2','tan1','gold1','lightpink','coral1','blue1')
+df_comb$Region=factor(df_comb$Region,levels=regionsTemp)
+model.list.ad.rd=list()
+i=1
+set.seed(123)
+for (j in regionsTemp) {
+  tempdata = df_comb%>%filter(mah_type==3 & Region==j)
+  model.temp = mgcv::gam(mah_dis~s(Corr_age)+s(Unique_ID,bs='re'),method='REML',data=tempdata)
+  model.list.ad.rd[[j]]=model.temp
+  temp.fit=plot_smooth(model.temp,view='Corr_age',print.summary=FALSE,sim.ci=TRUE,rm.ranef=TRUE)$fv
+  temp.fit$Region=j
+  der.model= gratia::derivatives(model.temp,term='s(Corr_age)',type='central',interval='simultaneous')
+  der.model$Region=j
+  if (i==1) {
+    fit.data.ad.rd = temp.fit
+    der.data.ad.rd = der.model
+  } else {
+    fit.data.ad.rd = rbind(fit.data.ad.rd,temp.fit)
+    der.data.ad.rd = rbind(der.data.ad.rd,der.model)
+  }
+  i=i+1
+}
+fit.data.ad.rd$Region=factor(fit.data.ad.rd$Region,levels=regionsTemp)
+der.data.ad.rd$Region=factor(der.data.ad.rd$Region,levels=regionsTemp)
+```
+
+
+
+```{r}
+library(ggplot2)
+library(gridExtra)
+p1=ggplot(df_comb[df_comb$mah_type==3,], aes(x=Corr_age, y=mah_dis,col=Region)) + geom_point(size=0.1) + scale_color_manual(values=regionsColor)+labs(x='Corrected Age',y='Mahalanobis Distance',title='B')+theme_classic()+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+p2 = fit.data.ad.rd %>% ggplot(aes(x=Corr_age,y=fit,color=Region))+ geom_line()+
+     labs(y = "Mahalanobis Distance",x='Corrected Age',title = "C") +
+     theme_classic()+scale_color_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+p3 =  der.data.ad.rd %>%
+   ggplot(aes(y = derivative, x = data, color=Region)) +
+     geom_line() +
+     labs(y = "Rate of change",x='Corrected Age',title = "D") +
+     theme_classic()+geom_hline(yintercept=0)+scale_color_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+tiff('../Figures/TrackSpecificMahDistanceADRD_NoBands.tiff',width=1080,height=320,pointsize=18)
+grid.arrange(p1,p2,p3,nrow=1)
+dev.off()
+```
+
+
+### CI
+```{r}
+
+p2.b = p2+geom_ribbon(aes(ymin= ll, ymax = ul, fill=Region), alpha=0.1, linetype=0)+scale_fill_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+p3.b = p3+geom_ribbon(aes(ymin= lower, ymax = upper, fill=Region), alpha=0.1, linetype=0)+scale_fill_manual(values=regionsColor)+theme(plot.title = element_text(hjust = 0.5,face='bold'))
+
+tiff('../Figures/TrackSpecificMahDistanceADRD_Bands.tiff',width=1080,height=320,pointsize=18)
+grid.arrange(p1,p2.b,p3.b,nrow=1)
+dev.off()
+```
+
+# Calculate correlations between Mahalanobis distance and derivative
+
+```{r}
+age.vector = unique(fit.data.ad.rd$Corr_age)
+cor.vector=NULL
+i=0
+for (t in age.vector) {
+  i=i+1
+  temp.a = fit.data.ad.rd%>%filter(fit.data.ad.rd$Corr_age==t)
+  temp.b = der.data.ad.rd%>%filter(abs(der.data.ad.rd$data-t)<1e-5) # some v minor difference in age
+  if (all(temp.a$Region!=temp.b$Region)) stop('Ordering of regions differs')
+  cor.vector[i] = cor(temp.a$fit,temp.b$derivative)
+}
+
+cor.dat = data.frame('Corr_age'=age.vector,'Correlation'=cor.vector)
+tiff('../Figures/CorrelationMahDistanceDerivativeAcrossTracts.tiff',pointsize=18)
+ggplot(cor.dat,aes(x=Corr_age,y=Correlation))+geom_line(col='red')
+dev.off()
+```
+
+# Create dendrogram
+Dendrogram looks different from Longchuan's previous anlaysis, currently this section is not used
+```{r}
+library(ggdendro)
+
+# ave.fit.data.ad.rd = fit.data.ad.rd%>%group_by(Region)%>%summarize(ave_fit = mean(fit))
+temp = fit.data.ad.rd%>%select(Corr_age,fit,Region)%>%pivot_wider(names_from=Corr_age,values_from=fit,names_prefix='Corr_age_')
+temp.matrix = as.matrix(temp[,2:ncol(temp)])
+rownames(temp.matrix) = temp$Region
+hc <- hclust(dist(temp.matrix), "ave")
+temp.dendro=as.dendrogram(hc)
+labels_color(temp.dendro)
+
+
+ggdendrogram(hc, rotate = TRUE, size = 2, color='red')
+
+tiff('../Figures/Dendrogram.tiff',pointsize=18)
+ggdendrogram(hc, rotate = TRUE, size = 2)+scale_fill_manual(values=regionsColor)
+dev.off()
+
+
++ geom_text(data=label(hc), aes(label=label, x=x, y=0, colour=hc$label)) 
+ 
+  
+      scale_colour_manual(values=c("blue", "orange", "darkgreen"))
+
+
++scale_fill_manual(values=regionsColor)
+ aes(label=label, x=x, y=0, colour=labs$group)) +
+     scale_colour_manual(values=c("blue", "orange", "darkgreen"))
+
+
+dd.row <- as.dendrogram(hclust(dist(temp.matrix)))
+ddata_x <- dendro_data(dd.row)
+p2 <- ggplot(segment(ddata_x)) + geom_segment(aes(x=x, y=y, xend=xend, yend=yend))
+p2+ geom_text(data=label(ddata_x), aes(label=label, x=x, y=0))
+
+
+```
